@@ -7,6 +7,7 @@ import {
   ArrowUp, ArrowDown, Camera, X, Settings2, Key, Check, Sun, Moon
 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 import {
   enhanceSummaryWithAI,
   enhanceBulletsWithAI,
@@ -858,6 +859,7 @@ export default function Builder() {
   const { theme, toggleTheme, isDark } = useTheme()
   const isLight = theme === 'light'
 
+  const { user, profile, getUserDefaults } = useAuth()
   const [data, setData] = useState(defaultData)
   const [accent, setAccent] = useState('#000000')
   const [font, setFont] = useState('Times New Roman')
@@ -877,6 +879,38 @@ export default function Builder() {
 
   const previewContainerRef = useRef(null)
   const fileInputRef = useRef(null)
+
+  // Auto-populate logged in user defaults into resume builder
+  useEffect(() => {
+    if (!user) return
+    const defaults = getUserDefaults ? getUserDefaults() : {}
+    const userFullName = defaults.name || profile?.full_name || user?.user_metadata?.full_name || ''
+    const userEmail = defaults.email || user?.email || ''
+
+    setData(prev => {
+      const isDefaultAuthor = prev.personal.name === 'Hritik Kumar' || prev.personal.name === 'Alex Johnson' || !prev.personal.name
+      if (isDefaultAuthor && (userFullName || userEmail)) {
+        return {
+          ...prev,
+          personal: {
+            ...prev.personal,
+            name: userFullName || (userEmail ? userEmail.split('@')[0] : prev.personal.name),
+            email: userEmail || prev.personal.email,
+            phone: defaults.phone || prev.personal.phone,
+            title: defaults.title || prev.personal.title,
+            location: defaults.location || prev.personal.location,
+            linkedin: defaults.linkedin || prev.personal.linkedin,
+            website: defaults.website || prev.personal.website,
+          },
+          summary: defaults.summary || prev.summary,
+          skills: (defaults.skills && typeof defaults.skills === 'string')
+            ? defaults.skills.split(',').map(s => s.trim()).filter(Boolean)
+            : prev.skills,
+        }
+      }
+      return prev
+    })
+  }, [user, profile, getUserDefaults])
 
   // Handle URL query parameter template changes
   useEffect(() => {

@@ -122,7 +122,7 @@ export default function Login() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-slate-400">Full Name</label>
                 <input {...register('name', { required: 'Name is required' })}
-                       placeholder="Alex Johnson"
+                       placeholder="Enter your full name"
                        className={`form-input ${errors.name ? 'border-red-500' : ''}`} />
                 {errors.name && <span className="text-red-400 text-xs">{errors.name.message}</span>}
               </div>

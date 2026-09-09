@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Zap, LogOut, User, Sun, Moon } from 'lucide-react'
+import { Menu, X, Zap, LogOut, User, Sun, Moon, Settings } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 
@@ -107,16 +107,25 @@ export default function Navbar() {
             </button>
 
             {isAuthenticated ? (
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <Link to="/dashboard" className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${
                   isLight ? 'bg-slate-50 border-slate-200 hover:bg-slate-100' : 'bg-white/5 border-white/10 hover:bg-white/10'
                 }`}>
                   <div className="w-6 h-6 rounded-full bg-purple-600 text-white text-[11px] font-bold flex items-center justify-center">
-                    {(profile?.full_name || user?.email || 'U')[0].toUpperCase()}
+                    {(profile?.full_name || user?.user_metadata?.full_name || user?.email || 'U')[0].toUpperCase()}
                   </div>
                   <span className={`text-xs font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
-                    {profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}
+                    {profile?.full_name?.split(' ')[0] || user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}
                   </span>
+                </Link>
+                <Link
+                  to="/dashboard?tab=settings"
+                  title="Profile & Resume Settings"
+                  className={`p-1.5 rounded-lg border transition-colors ${
+                    isLight ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-purple-600' : 'bg-white/5 border-white/10 text-slate-400 hover:text-purple-300'
+                  }`}
+                >
+                  <Settings size={15} />
                 </Link>
                 <button
                   onClick={handleSignOut}

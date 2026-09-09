@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Upload, Target, CheckCircle, XCircle, AlertCircle, Zap, BarChart2, RefreshCw } from 'lucide-react'
 import { calcAtsScore } from '../lib/utils'
+import { useAuth } from '../context/AuthContext'
 
 const sampleJob = `We are looking for a Senior Software Engineer with experience in:
 - React, TypeScript, Node.js, Python
@@ -11,8 +12,8 @@ const sampleJob = `We are looking for a Senior Software Engineer with experience
 - Bachelor's degree in Computer Science or related field
 - 5+ years of professional software development experience`
 
-const sampleResume = `Alex Johnson - Senior Software Engineer
-alex@email.com | San Francisco, CA | LinkedIn
+const sampleResume = `Professional Candidate - Senior Software Engineer
+candidate@email.com | San Francisco, CA | LinkedIn
 
 EXPERIENCE
 Senior Software Engineer - TechCorp (2021-Present)
@@ -58,11 +59,40 @@ function ScoreGauge({ score }) {
 }
 
 export default function AtsChecker() {
+  const { user, profile, getUserDefaults } = useAuth()
   const [jobDesc, setJobDesc] = useState(sampleJob)
   const [resume, setResume] = useState(sampleResume)
   const [result, setResult] = useState(null)
   const [scanning, setScanning] = useState(false)
   const fileRef = useRef()
+
+  useEffect(() => {
+    if (user) {
+      const defaults = getUserDefaults ? getUserDefaults() : {}
+      const name = defaults.name || profile?.full_name || user?.user_metadata?.full_name || (user?.email ? user.email.split('@')[0] : '')
+      const email = defaults.email || user.email || 'candidate@email.com'
+      const title = defaults.title || 'Senior Software Engineer'
+      if (name) {
+        setResume(prev => {
+          if (prev.startsWith('Alex Johnson') || prev.startsWith('Professional Candidate')) {
+            return `${name} - ${title}
+${email} | ${defaults.location || 'Remote'} | ${defaults.linkedin || 'LinkedIn'}
+
+EXPERIENCE
+${title} - TechCorp (2021-Present)
+- Built scalable web applications and high-throughput systems
+- Designed RESTful APIs and microservices using clean architecture
+- Automated deployment pipelines and optimized database latency
+- Led cross-functional collaboration in fast-paced agile teams
+
+EDUCATION
+Bachelor of Science / Technology in Computer Science or related field`
+          }
+          return prev
+        })
+      }
+    }
+  }, [user, profile, getUserDefaults])
 
   const analyze = async () => {
     if (!jobDesc.trim() || !resume.trim()) return

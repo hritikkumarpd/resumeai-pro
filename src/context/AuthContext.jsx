@@ -134,6 +134,71 @@ export function AuthProvider({ children }) {
     await authApi.forgotPassword({ email })
   }
 
+  const updateProfile = async (updates) => {
+    // 1. Try backend API update
+    try {
+      await authApi.updateProfile(updates)
+    } catch (apiErr) {
+      console.warn('Backend updateProfile skipped:', apiErr?.message)
+    }
+
+    // 2. Update Supabase Auth user_metadata
+    try {
+      const { data: updatedUser, error: authErr } = await supabase.auth.updateUser({
+        data: updates,
+      })
+      if (!authErr && updatedUser?.user) {
+        setUser(updatedUser.user)
+      }
+    } catch (e) {
+      console.warn('Supabase updateUser metadata error:', e?.message)
+    }
+
+    // 3. Update Supabase profiles table directly
+    try {
+      if (user?.id) {
+        await supabase
+          .from('profiles')
+          .update({
+            full_name: updates.full_name || updates.name,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', user.id)
+      }
+    } catch (_) {}
+
+    // 4. Save to localStorage per user ID for immediate local persistence
+    if (user?.id) {
+      const storageKey = `user_default_resume_${user.id}`
+      const existing = JSON.parse(localStorage.getItem(storageKey) || '{}')
+      localStorage.setItem(storageKey, JSON.stringify({ ...existing, ...updates }))
+    }
+
+    // 5. Update local profile state
+    setProfile(prev => ({
+      ...(prev || {}),
+      ...updates,
+      full_name: updates.full_name || updates.name || prev?.full_name,
+    }))
+  }
+
+  const getUserDefaults = useCallback(() => {
+    if (!user?.id) return {}
+    const local = JSON.parse(localStorage.getItem(`user_default_resume_${user.id}`) || '{}')
+    const fullName = local.name || local.full_name || profile?.full_name || user.user_metadata?.full_name || ''
+    return {
+      name: fullName || (user.email ? user.email.split('@')[0] : ''),
+      email: local.email || user.email || '',
+      phone: local.phone || user.user_metadata?.phone || '',
+      title: local.title || user.user_metadata?.title || '',
+      location: local.location || user.user_metadata?.location || '',
+      linkedin: local.linkedin || user.user_metadata?.linkedin || '',
+      website: local.website || user.user_metadata?.website || '',
+      summary: local.summary || user.user_metadata?.summary || '',
+      skills: local.skills || user.user_metadata?.skills || '',
+    }
+  }, [user, profile])
+
   const refreshProfile = () => fetchProfile()
 
   const value = {
@@ -149,6 +214,8 @@ export function AuthProvider({ children }) {
     signInWithGoogle,
     signOut,
     forgotPassword,
+    updateProfile,
+    getUserDefaults,
     refreshProfile,
   }
 

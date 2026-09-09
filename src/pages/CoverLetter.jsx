@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Sparkles, Copy, Download, RefreshCw, Mail, CheckCircle } from 'lucide-react'
 import { generateCoverLetterWithAI } from '../lib/aiService'
+import { useAuth } from '../context/AuthContext'
 
 const TEMPLATES = [
   'Standard Professional',
@@ -45,13 +46,29 @@ ${role} Applicant`
 }
 
 export default function CoverLetter() {
+  const { user, profile, getUserDefaults } = useAuth()
   const [letter, setLetter] = useState('')
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState(false)
   const [copied, setCopied] = useState(false)
   const [template, setTemplate] = useState(TEMPLATES[0])
   const [tone, setTone] = useState(TONES[0])
-  const { register, handleSubmit, formState: { errors } } = useForm()
+  const { register, handleSubmit, reset, formState: { errors } } = useForm()
+
+  // Pre-fill logged in user details
+  useEffect(() => {
+    if (user) {
+      const defaults = getUserDefaults ? getUserDefaults() : {}
+      const savedName = defaults.name || profile?.full_name || user?.user_metadata?.full_name || (user?.email ? user.email.split('@')[0] : '')
+      const savedRole = defaults.title || user?.user_metadata?.title || ''
+      const savedSkills = defaults.skills || user?.user_metadata?.skills || ''
+      reset({
+        name: savedName,
+        role: savedRole,
+        skills: savedSkills,
+      })
+    }
+  }, [user, profile, getUserDefaults, reset])
 
   const generate = async (data) => {
     setGenerating(true)
@@ -120,7 +137,7 @@ export default function CoverLetter() {
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-slate-400">Your Full Name *</label>
-                  <input {...register('name', { required: true })} placeholder="Alex Johnson" className="form-input" />
+                  <input {...register('name', { required: true })} placeholder="e.g. Rahul Sharma" className="form-input" />
                   {errors.name && <span className="text-red-400 text-xs">Required</span>}
                 </div>
 

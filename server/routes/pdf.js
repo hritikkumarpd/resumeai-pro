@@ -4,7 +4,7 @@ const { requireAuth } = require('../middleware/requireAuth')
 /* ── POST /api/pdf/generate ─────────────────────────────────── */
 /**
  * Generates a PDF from resume HTML using Puppeteer.
- * Frontend sends resume data → server renders HTML → returns PDF buffer.
+ * Frontend sends resume data → server renders HTML → returns PDF buffer with active clickable hyperlinks.
  */
 router.post('/generate', requireAuth, async (req, res) => {
   const { resumeData, accentColor = '#7C3AED', font = 'Inter' } = req.body
@@ -13,7 +13,7 @@ router.post('/generate', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Resume data with personal info is required.' })
   }
 
-  // Build HTML for the resume
+  // Build HTML for the resume with active hyperlinks
   const html = buildResumeHtml(resumeData, accentColor, font)
 
   try {
@@ -50,7 +50,7 @@ router.post('/generate', requireAuth, async (req, res) => {
   }
 })
 
-/* ── HTML Builder ───────────────────────────────────────────── */
+/* ── HTML Builder with Clickable Hyperlinks ─────────────────── */
 function buildResumeHtml(d, accent, font) {
   const p = d.personal || {}
   const exp = (d.experience || [])
@@ -58,6 +58,19 @@ function buildResumeHtml(d, accent, font) {
   const skills = (d.skills  || [])
   const projects = (d.projects || [])
   const certs = (d.certifications || [])
+
+  function formatUrl(url) {
+    if (!url) return ''
+    const trimmed = url.trim()
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  }
+
+  function cleanUrlDisplay(url) {
+    if (!url) return ''
+    return url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')
+  }
+
+  const cleanPhone = (p.phone || '').replace(/[^0-9+]/g, '')
 
   const sectionHeader = (title) =>
     `<div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${accent};border-bottom:1px solid ${accent};padding-bottom:3px;margin:14px 0 6px;">${title}</div>`
@@ -70,10 +83,13 @@ function buildResumeHtml(d, accent, font) {
   @import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@400;600;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: '${font}', Arial, sans-serif; font-size: 9pt; color: #1e293b; background: white; }
+  a { color: inherit; text-decoration: none; }
+  a:hover { text-decoration: underline; }
   .header { background: linear-gradient(135deg,#1a1040,${accent}); padding: 22px 28px; }
   .header h1 { font-size: 20pt; font-weight: 700; color: white; font-family: Georgia, serif; }
   .header .title { font-size: 10pt; color: ${accent}dd; margin-top: 2px; }
-  .header .contact { font-size: 7.5pt; color: rgba(255,255,255,0.6); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 12px; }
+  .header .contact { font-size: 7.5pt; color: rgba(255,255,255,0.75); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 12px; }
+  .header .contact a { color: rgba(255,255,255,0.85); }
   .body { padding: 14px 28px 20px; }
   .bullet { display: flex; gap: 6px; margin: 2px 0; }
   .bullet::before { content: "▸"; color: ${accent}; flex-shrink: 0; }
@@ -90,11 +106,11 @@ function buildResumeHtml(d, accent, font) {
   <h1>${p.name || 'Your Name'}</h1>
   <div class="title">${p.title || ''}</div>
   <div class="contact">
-    ${p.email    ? `<span>${p.email}</span>` : ''}
-    ${p.phone    ? `<span>${p.phone}</span>` : ''}
-    ${p.location ? `<span>${p.location}</span>` : ''}
-    ${p.linkedin ? `<span>${p.linkedin}</span>` : ''}
-    ${p.website  ? `<span>${p.website}</span>` : ''}
+    ${p.phone    ? `<a href="tel:${cleanPhone}">📞 ${p.phone}</a>` : ''}
+    ${p.email    ? `<a href="mailto:${p.email.trim()}">✉️ ${p.email}</a>` : ''}
+    ${p.location ? `<span>📍 ${p.location}</span>` : ''}
+    ${p.linkedin ? `<a href="${formatUrl(p.linkedin)}" target="_blank" rel="noopener noreferrer">💼 ${cleanUrlDisplay(p.linkedin)}</a>` : ''}
+    ${p.website  ? `<a href="${formatUrl(p.website)}" target="_blank" rel="noopener noreferrer">🌐 ${cleanUrlDisplay(p.website)}</a>` : ''}
   </div>
 </div>
 <div class="body">
@@ -110,15 +126,28 @@ function buildResumeHtml(d, accent, font) {
     </div>`).join('')}` : ''}
 
   ${edu.length ? `${sectionHeader('Education')}${edu.map(e => `
-    <div class="edu-row"><div><strong>${e.degree}</strong><span style="color:#475569;"> · ${e.school}</span>${e.gpa ? `<span style="color:#94a3b8;"> · GPA: ${e.gpa}</span>` : ''}</div><span class="date">${e.period}</span></div>`).join('')}` : ''}
+    <div class="edu-row"><div><strong>${e.degree}</strong><span style="color:#475569;"> · ${e.school}</span>${e.gpa ? `<span style="color:#94a3b8;"> · Score: ${e.gpa}</span>` : ''}</div><span class="date">${e.period}</span></div>`).join('')}` : ''}
 
   ${skills.length ? `${sectionHeader('Skills')}<div style="margin-top:2px;">${skills.map(s => `<span class="skill-tag">${s}</span>`).join('')}</div>` : ''}
 
   ${projects.length ? `${sectionHeader('Projects')}${projects.map(p => `
-    <div style="margin-bottom:6px;"><strong>${p.name}</strong>${p.link ? `<span style="color:#94a3b8;font-size:7.5pt;"> · ${p.link}</span>` : ''}<div style="color:#475569;font-size:8.5pt;margin-top:1px;">${p.desc}</div></div>`).join('')}` : ''}
+    <div style="margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <strong>${p.name}</strong>
+        ${p.link ? `<a href="${formatUrl(p.link)}" target="_blank" rel="noopener noreferrer" style="color:${accent};font-size:7.5pt;text-decoration:underline;">${cleanUrlDisplay(p.link)} ↗</a>` : ''}
+      </div>
+      <div style="color:#475569;font-size:8.5pt;margin-top:1px;">${p.desc}</div>
+    </div>`).join('')}` : ''}
 
-  ${certs.length ? `${sectionHeader('Certifications')}${certs.map(c => `
-    <div style="display:flex;justify-content:space-between;"><div><strong>${c.name}</strong>${c.issuer ? `<span style="color:#475569;"> · ${c.issuer}</span>` : ''}</div><span class="date">${c.year}</span></div>`).join('')}` : ''}
+  ${certs.length ? `${sectionHeader('Certifications & Achievements')}${certs.map(c => `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
+      <div>
+        <strong>${c.name}</strong>
+        ${c.issuer ? `<span style="color:#475569;"> · ${c.issuer}</span>` : ''}
+        ${c.link ? `<a href="${formatUrl(c.link)}" target="_blank" rel="noopener noreferrer" style="color:${accent};font-size:7.5pt;margin-left:6px;text-decoration:underline;">[Verify ↗]</a>` : ''}
+      </div>
+      <span class="date">${c.year}</span>
+    </div>`).join('')}` : ''}
 </div>
 </body>
 </html>`

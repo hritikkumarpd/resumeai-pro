@@ -97,8 +97,8 @@ const defaultData = {
     }
   ],
   certifications: [
-    { id: 1, name: 'Machine Learning & AI Specialization', issuer: 'DeepLearning.AI / Coursera', year: '2024' },
-    { id: 2, name: 'Solved 350+ DSA Problems (LeetCode & GFG)', issuer: 'LeetCode', year: '2024' },
+    { id: 1, name: 'Machine Learning & AI Specialization', issuer: 'DeepLearning.AI / Coursera', year: '2024', link: 'https://coursera.org/verify/ML-SPECIALIZATION' },
+    { id: 2, name: 'Solved 350+ DSA Problems (LeetCode & GFG)', issuer: 'LeetCode', year: '2024', link: 'https://leetcode.com/u/hritikkumar/' },
   ],
 }
 
@@ -232,6 +232,18 @@ const A4_RESUME_STYLE = {
   position: 'relative'
 }
 
+/* ── URL & Contact Formatting Helpers for Clickable Hyperlinks ── */
+function formatUrl(url) {
+  if (!url) return ''
+  const trimmed = url.trim()
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+}
+
+function cleanUrlDisplay(url) {
+  if (!url) return ''
+  return url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')
+}
+
 function ResumeDoc({
   data,
   accent = '#000000',
@@ -246,12 +258,38 @@ function ResumeDoc({
     lineHeight: 1.38
   }
 
-  const contacts = [
-    data.personal.phone,
-    data.personal.email,
-    data.personal.linkedin ? data.personal.linkedin.replace(/^https?:\/\//, '') : '',
-    data.personal.website ? data.personal.website.replace(/^https?:\/\//, '') : '',
-    data.personal.location
+  const contactItems = [
+    data.personal.phone ? {
+      type: 'phone',
+      label: data.personal.phone,
+      href: `tel:${data.personal.phone.replace(/[^0-9+]/g, '')}`,
+      isLink: true
+    } : null,
+    data.personal.email ? {
+      type: 'email',
+      label: data.personal.email,
+      href: `mailto:${data.personal.email.trim()}`,
+      isLink: true
+    } : null,
+    data.personal.linkedin ? {
+      type: 'linkedin',
+      label: cleanUrlDisplay(data.personal.linkedin),
+      href: formatUrl(data.personal.linkedin),
+      isLink: true,
+      target: '_blank'
+    } : null,
+    data.personal.website ? {
+      type: 'website',
+      label: cleanUrlDisplay(data.personal.website),
+      href: formatUrl(data.personal.website),
+      isLink: true,
+      target: '_blank'
+    } : null,
+    data.personal.location ? {
+      type: 'location',
+      label: data.personal.location,
+      isLink: false
+    } : null
   ].filter(Boolean)
 
   const hasPhoto = Boolean(data.personal.photo)
@@ -269,9 +307,25 @@ function ResumeDoc({
             <div className="font-semibold text-gray-700 mt-0.5" style={{ fontSize: `${Math.round(13.5 * fontSizeScale)}px` }}>
               {data.personal.title}
             </div>
-            <div className="text-gray-600 mt-1 flex flex-wrap gap-x-2.5 leading-normal" style={{ fontSize: `${Math.round(11 * fontSizeScale)}px` }}>
-              {contacts.map((c, i) => (
-                <span key={i}>{c}{i < contacts.length - 1 ? ' | ' : ''}</span>
+            {/* Clickable contacts row */}
+            <div className="text-gray-600 mt-1 flex flex-wrap items-center gap-x-2.5 leading-normal" style={{ fontSize: `${Math.round(11 * fontSizeScale)}px` }}>
+              {contactItems.map((c, i) => (
+                <span key={i} className="inline-flex items-center">
+                  {c.isLink ? (
+                    <a
+                      href={c.href}
+                      target={c.target || '_self'}
+                      rel={c.target ? 'noopener noreferrer' : undefined}
+                      className="text-gray-700 hover:text-purple-600 hover:underline transition-colors cursor-pointer"
+                      title={`Open ${c.type}: ${c.label}`}
+                    >
+                      {c.label}
+                    </a>
+                  ) : (
+                    <span>{c.label}</span>
+                  )}
+                  {i < contactItems.length - 1 && <span className="ml-2.5 text-gray-400 select-none">|</span>}
+                </span>
               ))}
             </div>
           </div>
@@ -369,8 +423,20 @@ function ResumeDoc({
                 <div className="space-y-2">
                   {data.projects.map(p => (
                     <div key={p.id}>
-                      <div className="font-bold text-black" style={{ fontSize: `${Math.round(12.5 * fontSizeScale)}px` }}>
-                        {p.name} {p.link && <span className="font-normal text-gray-600 text-[10px]">| {p.link}</span>}
+                      <div className="font-bold text-black flex items-baseline flex-wrap gap-x-2" style={{ fontSize: `${Math.round(12.5 * fontSizeScale)}px` }}>
+                        <span>{p.name}</span>
+                        {p.link && (
+                          <a
+                            href={formatUrl(p.link)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-normal text-purple-700 hover:text-purple-900 hover:underline text-[10.5px] inline-flex items-center gap-0.5 cursor-pointer"
+                            title={`Open project: ${p.link}`}
+                          >
+                            <span>| {cleanUrlDisplay(p.link)}</span>
+                            <span className="text-[9px]">↗</span>
+                          </a>
+                        )}
                       </div>
                       <div className="text-gray-800 leading-normal pl-2.5 border-l-2 border-gray-300 ml-0.5 mt-0.5" style={{ fontSize: `${Math.round(11.5 * fontSizeScale)}px` }}>
                         {p.desc}
@@ -393,6 +459,17 @@ function ResumeDoc({
                     <li key={c.id}>
                       <span className="font-bold text-black">{c.name}</span>
                       {c.issuer ? ` — ${c.issuer}` : ''} {c.year ? `(${c.year})` : ''}
+                      {c.link && (
+                        <a
+                          href={formatUrl(c.link)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-2 text-[10.5px] text-purple-700 hover:text-purple-900 hover:underline font-normal inline-flex items-center gap-0.5 cursor-pointer"
+                          title={`Verify credential: ${c.name}`}
+                        >
+                          <span>[Verify Credential ↗]</span>
+                        </a>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -434,12 +511,36 @@ function ResumeDoc({
                    style={{ borderColor: accent, fontSize: `${Math.round(12.5 * fontSizeScale)}px` }}>
                 Contact & Links
               </div>
-              <div className="text-gray-800 space-y-1 break-words leading-normal" style={{ fontSize: `${Math.round(11 * fontSizeScale)}px` }}>
-                {data.personal.phone && <div>{data.personal.phone}</div>}
-                {data.personal.email && <div>{data.personal.email}</div>}
-                {data.personal.location && <div>{data.personal.location}</div>}
-                {data.personal.linkedin && <div>{data.personal.linkedin}</div>}
-                {data.personal.website && <div>{data.personal.website}</div>}
+              <div className="text-gray-800 space-y-1.5 break-words leading-normal" style={{ fontSize: `${Math.round(11 * fontSizeScale)}px` }}>
+                {data.personal.phone && (
+                  <div>
+                    <a href={`tel:${data.personal.phone.replace(/[^0-9+]/g, '')}`} className="text-gray-800 hover:text-purple-700 hover:underline cursor-pointer block truncate" title="Call">
+                      📞 {data.personal.phone}
+                    </a>
+                  </div>
+                )}
+                {data.personal.email && (
+                  <div>
+                    <a href={`mailto:${data.personal.email.trim()}`} className="text-gray-800 hover:text-purple-700 hover:underline cursor-pointer block truncate" title="Email">
+                      ✉️ {data.personal.email}
+                    </a>
+                  </div>
+                )}
+                {data.personal.location && <div className="truncate">📍 {data.personal.location}</div>}
+                {data.personal.linkedin && (
+                  <div>
+                    <a href={formatUrl(data.personal.linkedin)} target="_blank" rel="noopener noreferrer" className="text-purple-700 hover:text-purple-900 hover:underline cursor-pointer block truncate" title="LinkedIn">
+                      💼 {cleanUrlDisplay(data.personal.linkedin)} ↗
+                    </a>
+                  </div>
+                )}
+                {data.personal.website && (
+                  <div>
+                    <a href={formatUrl(data.personal.website)} target="_blank" rel="noopener noreferrer" className="text-purple-700 hover:text-purple-900 hover:underline cursor-pointer block truncate" title="Portfolio / GitHub">
+                      🌐 {cleanUrlDisplay(data.personal.website)} ↗
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -471,6 +572,28 @@ function ResumeDoc({
                 <div className="text-gray-800 space-y-1 leading-normal" style={{ fontSize: `${Math.round(11 * fontSizeScale)}px` }}>
                   <div><span className="font-bold text-black block">Core:</span>{data.skills.slice(0, 5).join(', ')}</div>
                   <div><span className="font-bold text-black block">Tools & Libs:</span>{data.skills.slice(5).join(', ')}</div>
+                </div>
+              </div>
+            )}
+
+            {data.certifications.length > 0 && (
+              <div>
+                <div className="font-bold uppercase tracking-wider text-black border-b pb-0.5 mb-1.5"
+                     style={{ borderColor: accent, fontSize: `${Math.round(12.5 * fontSizeScale)}px` }}>
+                  Certifications
+                </div>
+                <div className="space-y-1.5 text-gray-800" style={{ fontSize: `${Math.round(10.5 * fontSizeScale)}px` }}>
+                  {data.certifications.map(c => (
+                    <div key={c.id}>
+                      <div className="font-semibold text-black leading-tight">{c.name}</div>
+                      <div className="text-gray-600 text-[10px]">{c.issuer} {c.year ? `(${c.year})` : ''}</div>
+                      {c.link && (
+                        <a href={formatUrl(c.link)} target="_blank" rel="noopener noreferrer" className="text-[10px] text-purple-700 hover:underline block truncate mt-0.5 font-medium">
+                          Verify Credential ↗
+                        </a>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -520,8 +643,20 @@ function ResumeDoc({
                 <div className="space-y-2">
                   {data.projects.map(p => (
                     <div key={p.id}>
-                      <div className="font-bold text-black" style={{ fontSize: `${Math.round(12.5 * fontSizeScale)}px` }}>
-                        {p.name} {p.link && <span className="font-normal text-gray-600 text-[10px]">| {p.link}</span>}
+                      <div className="font-bold text-black flex items-baseline flex-wrap gap-x-1.5" style={{ fontSize: `${Math.round(12.5 * fontSizeScale)}px` }}>
+                        <span>{p.name}</span>
+                        {p.link && (
+                          <a
+                            href={formatUrl(p.link)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-normal text-purple-700 hover:text-purple-900 hover:underline text-[10px] inline-flex items-center gap-0.5 cursor-pointer"
+                            title={`Open project: ${p.link}`}
+                          >
+                            <span>| {cleanUrlDisplay(p.link)}</span>
+                            <span>↗</span>
+                          </a>
+                        )}
                       </div>
                       <div className="text-gray-800 leading-normal pl-2 border-l-2 border-gray-300 ml-0.5 mt-0.5" style={{ fontSize: `${Math.round(11.5 * fontSizeScale)}px` }}>
                         {p.desc}
@@ -557,11 +692,37 @@ function ResumeDoc({
               </div>
             </div>
           </div>
-          <div className="text-right text-gray-800 leading-normal" style={{ fontSize: `${Math.round(11 * fontSizeScale)}px` }}>
-            {data.personal.email && <div>{data.personal.email}</div>}
-            {data.personal.phone && <div>{data.personal.phone}</div>}
+          {/* Clickable Header Contacts */}
+          <div className="text-right text-gray-800 leading-normal space-y-0.5" style={{ fontSize: `${Math.round(11 * fontSizeScale)}px` }}>
+            {data.personal.email && (
+              <div>
+                <a href={`mailto:${data.personal.email.trim()}`} className="text-gray-800 hover:text-blue-700 hover:underline cursor-pointer" title="Email">
+                  {data.personal.email}
+                </a>
+              </div>
+            )}
+            {data.personal.phone && (
+              <div>
+                <a href={`tel:${data.personal.phone.replace(/[^0-9+]/g, '')}`} className="text-gray-800 hover:text-blue-700 hover:underline cursor-pointer" title="Call">
+                  {data.personal.phone}
+                </a>
+              </div>
+            )}
             {data.personal.location && <div>{data.personal.location}</div>}
-            {data.personal.linkedin && <div>{data.personal.linkedin}</div>}
+            {data.personal.linkedin && (
+              <div>
+                <a href={formatUrl(data.personal.linkedin)} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-900 hover:underline cursor-pointer" title="LinkedIn Profile">
+                  {cleanUrlDisplay(data.personal.linkedin)} ↗
+                </a>
+              </div>
+            )}
+            {data.personal.website && (
+              <div>
+                <a href={formatUrl(data.personal.website)} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-900 hover:underline cursor-pointer" title="GitHub / Portfolio">
+                  {cleanUrlDisplay(data.personal.website)} ↗
+                </a>
+              </div>
+            )}
           </div>
         </div>
 
@@ -640,9 +801,19 @@ function ResumeDoc({
                 <div className="space-y-2">
                   {data.projects.map(p => (
                     <div key={p.id}>
-                      <div className="font-bold text-black flex justify-between" style={{ fontSize: `${Math.round(12 * fontSizeScale)}px` }}>
+                      <div className="font-bold text-black flex justify-between items-baseline" style={{ fontSize: `${Math.round(12 * fontSizeScale)}px` }}>
                         <span>{p.name}</span>
-                        {p.link && <span className="font-normal text-gray-600 text-[10px]">{p.link}</span>}
+                        {p.link && (
+                          <a
+                            href={formatUrl(p.link)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-normal text-blue-700 hover:underline text-[10.5px] cursor-pointer"
+                            title={`Open project: ${p.link}`}
+                          >
+                            {cleanUrlDisplay(p.link)} ↗
+                          </a>
+                        )}
                       </div>
                       <div className="text-gray-800 leading-normal mt-0.5" style={{ fontSize: `${Math.round(11.5 * fontSizeScale)}px` }}>
                         {p.desc}
@@ -676,6 +847,17 @@ function ResumeDoc({
                     <li key={c.id}>
                       <span className="font-semibold text-black">{c.name}</span>
                       {c.issuer ? ` (${c.issuer})` : ''} {c.year ? `[${c.year}]` : ''}
+                      {c.link && (
+                        <a
+                          href={formatUrl(c.link)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-2 text-[10.5px] text-blue-700 hover:underline font-normal cursor-pointer"
+                          title={`Verify credential: ${c.name}`}
+                        >
+                          [Link ↗]
+                        </a>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -703,10 +885,26 @@ function ResumeDoc({
             style={{ fontSize: `${Math.round(26 * fontSizeScale)}px`, letterSpacing: '0.8px' }}>
           {data.personal.name || 'YOUR NAME'}
         </h1>
-        <div className="text-gray-800 flex justify-center flex-wrap gap-x-2.5 leading-normal"
+        {/* Clickable Centered Contacts */}
+        <div className="text-gray-800 flex justify-center flex-wrap items-center gap-x-2.5 leading-normal"
              style={{ fontSize: `${Math.round(11 * fontSizeScale)}px` }}>
-          {contacts.map((c, i) => (
-            <span key={i}>{c}{i < contacts.length - 1 ? ' | ' : ''}</span>
+          {contactItems.map((c, i) => (
+            <span key={i} className="inline-flex items-center">
+              {c.isLink ? (
+                <a
+                  href={c.href}
+                  target={c.target || '_self'}
+                  rel={c.target ? 'noopener noreferrer' : undefined}
+                  className="text-gray-800 hover:text-blue-700 hover:underline transition-colors cursor-pointer"
+                  title={`Open ${c.type}: ${c.label}`}
+                >
+                  {c.label}
+                </a>
+              ) : (
+                <span>{c.label}</span>
+              )}
+              {i < contactItems.length - 1 && <span className="ml-2.5 text-gray-400 select-none">|</span>}
+            </span>
           ))}
         </div>
       </div>
@@ -810,9 +1008,15 @@ function ResumeDoc({
                          style={{ fontSize: `${Math.round(12.5 * fontSizeScale)}px` }}>
                       <span>{p.name}</span>
                       {p.link && (
-                        <span className="font-normal text-gray-600 text-[10.5px]">
-                          {p.link}
-                        </span>
+                        <a
+                          href={formatUrl(p.link)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-normal text-blue-700 hover:text-blue-900 hover:underline text-[10.5px] cursor-pointer"
+                          title={`Open project: ${p.link}`}
+                        >
+                          {cleanUrlDisplay(p.link)} ↗
+                        </a>
                       )}
                     </div>
                     <p className="text-gray-850 leading-normal pl-2 border-l-2 border-gray-400 mt-0.5"
@@ -838,6 +1042,17 @@ function ResumeDoc({
                   <li key={c.id}>
                     <span className="font-bold text-black">{c.name}</span>
                     {c.issuer ? ` — ${c.issuer}` : ''} {c.year ? `(${c.year})` : ''}
+                    {c.link && (
+                      <a
+                        href={formatUrl(c.link)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 text-[10.5px] text-blue-700 hover:text-blue-900 hover:underline font-normal not-italic cursor-pointer"
+                        title={`Verify credential: ${c.name}`}
+                      >
+                        [Verify ↗]
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -1268,10 +1483,11 @@ export default function Builder() {
 
           {/* AI Settings Key Button */}
           <button onClick={() => setIsAiModalOpen(true)}
-                  title="Configure Google Gemini 1.5 API Key (100% Free)"
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg font-medium text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 transition-all">
+                  title="Inbuilt Unlimited Free Gemini AI Model Active"
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-medium text-emerald-300 hover:text-white bg-emerald-500/15 border border-emerald-500/30 transition-all shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <Sparkles size={12} className="text-emerald-400" />
-            <span className="hidden sm:inline">Gemini AI</span>
+            <span className="hidden sm:inline font-semibold">Gemini AI Active</span>
           </button>
 
           {/* Zoom controls */}
@@ -1624,9 +1840,10 @@ export default function Builder() {
                             <Field label="Issuer" value={c.issuer} onChange={v => upd('certifications', data.certifications.map(x => x.id === c.id ? { ...x, issuer: v } : x))} placeholder="DeepLearning.AI" />
                             <Field label="Year" value={c.year} onChange={v => upd('certifications', data.certifications.map(x => x.id === c.id ? { ...x, year: v } : x))} placeholder="2024" />
                           </div>
+                          <Field label="Credential / Certificate URL (Optional)" value={c.link || ''} onChange={v => upd('certifications', data.certifications.map(x => x.id === c.id ? { ...x, link: v } : x))} placeholder="https://coursera.org/verify/... or certificate link" />
                         </div>
                       ))}
-                      <button onClick={() => upd('certifications', [...data.certifications, { id: Date.now(), name: '', issuer: '', year: '' }])}
+                      <button onClick={() => upd('certifications', [...data.certifications, { id: Date.now(), name: '', issuer: '', year: '', link: '' }])}
                               className="flex items-center gap-2 text-xs text-purple-400 hover:text-purple-300 transition-colors py-1.5 font-medium">
                         <Plus size={13} /> Add Certification
                       </button>
@@ -1704,32 +1921,31 @@ export default function Builder() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-emerald-300 font-bold text-base">
                 <Sparkles size={18} className="text-emerald-400" />
-                <span>Google Gemini AI (100% Free)</span>
+                <span>Google Gemini AI (Inbuilt Unlimited Free)</span>
               </div>
               <button onClick={() => setIsAiModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-lg">
                 <X size={16} />
               </button>
             </div>
 
-            {/* ₹0 Free Tier Notice */}
-            <div className="p-3 mb-4 rounded-xl text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex flex-col gap-1">
-              <div className="font-semibold flex items-center gap-1.5 text-emerald-200">
-                <Check size={14} className="text-emerald-400" /> ₹0 Cost — Free Forever (No Credit Card)
+            {/* Inbuilt Active Status Card */}
+            <div className="p-3.5 mb-4 rounded-xl text-xs bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 flex items-start gap-3 shadow-inner">
+              <CheckCircle2 size={20} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-semibold text-emerald-200 text-xs flex items-center gap-1.5">
+                  Inbuilt Unlimited Free Gemini Model Active
+                </div>
+                <p className="text-[11px] text-emerald-300/90 leading-relaxed">
+                  Every AI feature in ResumeAI Pro works 100% free with <b>zero API key setup</b>. You can click <b>"Auto-Enhance with AI"</b> on your summary or <b>"AI Enhance Bullets"</b> across any job experience at any time without hitting limits!
+                </p>
               </div>
-              <p className="text-[11px] text-emerald-300/80 leading-relaxed">
-                Google Gemini 1.5 Flash offers thousands of free AI requests daily. You can run your entire resume builder and enhancements at completely zero cost.
-              </p>
             </div>
-
-            <p className="text-xs text-slate-300 mb-3 leading-relaxed">
-              Enter your free <b>Google Gemini API Key</b> from Google AI Studio. If left blank, ResumeAI Pro's built-in intelligent FAANG enhancer works automatically offline.
-            </p>
 
             <div className="flex flex-col gap-2 mb-4">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-emerald-300 flex items-center gap-1.5">
-                  <Key size={13} />
-                  <span>Gemini API Key</span>
+                <label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Key size={13} className="text-purple-400" />
+                  <span>Personal Google AI Studio Key (Optional Override)</span>
                 </label>
                 <a
                   href="https://aistudio.google.com/app/apikey"
@@ -1737,24 +1953,24 @@ export default function Builder() {
                   rel="noreferrer"
                   className="text-[11px] text-cyan-400 hover:text-cyan-300 underline font-medium"
                 >
-                  Get Free Key in 10s &rarr;
+                  Get Personal Key ↗
                 </a>
               </div>
               <input
                 type="password"
                 value={geminiApiKey}
                 onChange={e => setGeminiApiKey(e.target.value)}
-                placeholder="AIzaSy..."
-                className="form-input text-xs py-2 px-3 bg-[#151845] border-emerald-500/40 text-slate-100 rounded-lg w-full font-mono focus:border-emerald-400"
+                placeholder="Leave blank to use Inbuilt Unlimited Free Model..."
+                className="form-input text-xs py-2 px-3 bg-[#151845] border-purple-500/30 text-slate-100 rounded-lg w-full font-mono focus:border-emerald-400"
               />
               <span className="text-[10px] text-slate-400">
-                Saved safely in your browser localStorage. Completely private and never shared.
+                Optional: Leave blank for standard inbuilt engine, or enter your own custom Google Gemini key if desired.
               </span>
             </div>
 
             <div className="flex items-center justify-between pt-3 border-t border-white/10">
               <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-                {keySaved ? <><Check size={13} /> Saved successfully!</> : (geminiApiKey ? <span className="text-slate-400 text-[11px]">Key active</span> : <span className="text-slate-500 text-[11px]">Using offline smart enhancer</span>)}
+                {keySaved ? <><Check size={13} /> Saved successfully!</> : (geminiApiKey ? <span className="text-slate-300 text-[11px]">Custom key active</span> : <span className="text-emerald-400 text-[11px] font-medium flex items-center gap-1">● Inbuilt Free AI Active</span>)}
               </span>
               <div className="flex items-center gap-2">
                 <button onClick={() => setIsAiModalOpen(false)}
@@ -1763,7 +1979,7 @@ export default function Builder() {
                 </button>
                 <button onClick={handleSaveApiKey}
                         className="btn-primary text-xs px-4 py-1.5 rounded-lg font-semibold shadow-md bg-emerald-600 hover:bg-emerald-500 border-emerald-500">
-                  Save Key
+                  Save
                 </button>
               </div>
             </div>

@@ -65,18 +65,23 @@ router.post('/verify', requireAuth, async (req, res) => {
     })
   }
 
-  if (!plan || !PLAN_PRICES[plan]) {
-    return res.status(400).json({ error: `Invalid or missing plan: ${plan}` })
+  const secret = process.env.RAZORPAY_KEY_SECRET
+  if (!secret) {
+    console.error('RAZORPAY_KEY_SECRET is not configured on server')
+    return res.status(500).json({ error: 'Payment gateway configuration error.' })
   }
 
-  // Verify signature using HMAC-SHA256
+  // 1. Verify HMAC signature using timingSafeEqual
   const body = `${razorpay_order_id}|${razorpay_payment_id}`
   const expectedSignature = crypto
-    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+    .createHmac('sha256', secret)
     .update(body)
     .digest('hex')
 
-  if (expectedSignature !== razorpay_signature) {
+  const expectedBuf = Buffer.from(expectedSignature, 'hex')
+  const actualBuf   = Buffer.from(razorpay_signature, 'hex')
+
+  if (expectedBuf.length !== actualBuf.length || !crypto.timingSafeEqual(expectedBuf, actualBuf)) {
     console.error('Payment verification failed — signature mismatch', {
       order_id:   razorpay_order_id,
       payment_id: razorpay_payment_id,
@@ -84,13 +89,73 @@ router.post('/verify', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Payment verification failed. Signature mismatch.' })
   }
 
-  // Signature verified — update user profile
-  const planName = plan.replace(/_monthly|_yearly/, '')
+  // 2. Anti-replay protection: verify payment hasn't already been processed
+  const { data: existingPayment } = await supabaseAdmin
+    .from('payments')
+    .select('id')
+    .eq('payment_id', razorpay_payment_id)
+    .maybeSingle()
+
+  if (existingPayment) {
+    return res.status(409).json({ error: 'This payment has already been verified and processed.' })
+  }
+
+  // 3. Security: Fetch order details directly from Razorpay to prevent plan tampering
+  let verifiedPlanKey = plan
+  let orderAmount = 0
+  try {
+    const rzpOrder = await razorpay.orders.fetch(razorpay_order_id)
+    if (!rzpOrder) {
+      return res.status(400).json({ error: 'Order not found in payment gateway.' })
+    }
+
+    // Verify order belonged to current authenticated user
+    if (rzpOrder.notes?.supabase_user_id && rzpOrder.notes.supabase_user_id !== req.user.id) {
+      console.error('Payment order user mismatch:', { orderUser: rzpOrder.notes.supabase_user_id, reqUser: req.user.id })
+      return res.status(403).json({ error: 'Payment order does not belong to this user account.' })
+    }
+
+    // Derive plan directly from trusted Razorpay order notes
+    const trustedPlanKey = rzpOrder.notes?.plan || plan
+    if (!PLAN_PRICES[trustedPlanKey]) {
+      return res.status(400).json({ error: `Invalid plan specified in order: ${trustedPlanKey}` })
+    }
+
+    // Verify amount matches plan pricing
+    if (rzpOrder.amount < PLAN_PRICES[trustedPlanKey].amount) {
+      console.error('Payment amount tampering detected:', { orderAmount: rzpOrder.amount, expected: PLAN_PRICES[trustedPlanKey].amount })
+      return res.status(400).json({ error: 'Payment amount does not match plan price.' })
+    }
+
+    verifiedPlanKey = trustedPlanKey
+    orderAmount = rzpOrder.amount
+  } catch (fetchErr) {
+    console.warn('Could not fetch Razorpay order directly, checking fallback plan config:', fetchErr?.message)
+    if (!verifiedPlanKey || !PLAN_PRICES[verifiedPlanKey]) {
+      return res.status(400).json({ error: `Invalid or missing plan: ${verifiedPlanKey}` })
+    }
+    orderAmount = PLAN_PRICES[verifiedPlanKey].amount
+  }
+
+  // 4. Derive canonical clean plan name ('pro' or 'lifetime')
+  const planName = verifiedPlanKey.replace(/_monthly|_yearly/, '')
 
   try {
+    // Record payment in payments ledger (guarantees anti-replay)
+    await supabaseAdmin.from('payments').insert({
+      user_id:    req.user.id,
+      order_id:   razorpay_order_id,
+      payment_id: razorpay_payment_id,
+      plan:       planName,
+      amount:     orderAmount,
+      status:     'success',
+    })
+
+    // Update user profile plan
     await supabaseAdmin.from('profiles').update({
       plan:                planName,
       subscription_status: 'active',
+      updated_at:          new Date().toISOString(),
     }).eq('id', req.user.id)
 
     // Send confirmation email
@@ -113,9 +178,10 @@ router.post('/verify', requireAuth, async (req, res) => {
       message:    'Payment verified successfully!',
       payment_id: razorpay_payment_id,
       order_id:   razorpay_order_id,
+      plan:       planName,
     })
   } catch (err) {
-    console.error('Error updating profile after payment:', err)
+    console.error('Error recording payment / updating profile:', err)
     res.status(500).json({ error: 'Payment verified but failed to update profile. Contact support.' })
   }
 })

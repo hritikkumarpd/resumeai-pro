@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Upload, Target, CheckCircle, XCircle, AlertCircle, Zap, BarChart2, RefreshCw } from 'lucide-react'
 import { calcAtsScore } from '../lib/utils'
 import { useAuth } from '../context/AuthContext'
+import { atsApi } from '../lib/api'
 
 const sampleJob = `We are looking for a Senior Software Engineer with experience in:
 - React, TypeScript, Node.js, Python
@@ -98,8 +99,24 @@ Bachelor of Science / Technology in Computer Science or related field`
     if (!jobDesc.trim() || !resume.trim()) return
     setScanning(true)
     setResult(null)
-    await new Promise(r => setTimeout(r, 2000))
-    setResult(calcAtsScore(resume, jobDesc))
+
+    // Calculate instant ATS score client-side
+    const localScore = calcAtsScore(resume, jobDesc)
+
+    // If authenticated, persist scan to backend database
+    if (user) {
+      try {
+        await atsApi.analyze({
+          resume_text: resume,
+          job_description: jobDesc,
+        })
+      } catch (err) {
+        console.warn('Backend ATS history save skipped:', err?.message)
+      }
+    }
+
+    await new Promise(r => setTimeout(r, 1200))
+    setResult(localScore)
     setScanning(false)
   }
 

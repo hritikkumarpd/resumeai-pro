@@ -11,6 +11,8 @@ import Templates    from './pages/Templates'
 import AtsChecker   from './pages/AtsChecker'
 import CoverLetter  from './pages/CoverLetter'
 import Pricing      from './pages/Pricing'
+import Admin        from './pages/Admin'
+import ResetPassword from './pages/ResetPassword'
 import './App.css'
 
 /* ── Protected Route ────────────────────────────────────────── */
@@ -61,6 +63,7 @@ function AppRoutes() {
       <Route path="/" element={<WithNav><Home /></WithNav>} />
       <Route path="/templates"    element={<WithNav><Templates /></WithNav>} />
       <Route path="/pricing"      element={<WithNav><Pricing /></WithNav>} />
+      <Route path="/reset-password" element={<WithNav><ResetPassword /></WithNav>} />
 
       {/* Auth (redirect if already logged in) */}
       <Route path="/login" element={
@@ -82,6 +85,9 @@ function AppRoutes() {
       } />
       <Route path="/cover-letter" element={
         <ProtectedRoute><WithNav><CoverLetter /></WithNav></ProtectedRoute>
+      } />
+      <Route path="/admin" element={
+        <ProtectedRoute><WithNav><Admin /></WithNav></ProtectedRoute>
       } />
 
       {/* Catch all */}

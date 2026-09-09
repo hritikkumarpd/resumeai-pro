@@ -24,8 +24,8 @@ const supabaseAdmin = createClient(
 
 // Anon client (respects RLS — matches what frontend uses)
 const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
+  supabaseUrl,
+  supabaseAnonKey
 )
 
 module.exports = { supabase, supabaseAdmin }

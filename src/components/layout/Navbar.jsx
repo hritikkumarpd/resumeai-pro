@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Zap, LogOut, User, Sun, Moon, Settings } from 'lucide-react'
+import { Menu, X, Zap, LogOut, User, Sun, Moon, Settings, Shield } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 
@@ -127,6 +127,15 @@ export default function Navbar() {
                 >
                   <Settings size={15} />
                 </Link>
+                <Link
+                  to="/admin"
+                  title="Admin Dashboard"
+                  className={`p-1.5 rounded-lg border transition-colors ${
+                    isLight ? 'bg-purple-50 border-purple-200 text-purple-600 hover:bg-purple-100' : 'bg-purple-500/10 border-purple-500/20 text-purple-300 hover:bg-purple-500/20'
+                  }`}
+                >
+                  <Shield size={15} />
+                </Link>
                 <button
                   onClick={handleSignOut}
                   title="Sign out"
@@ -209,6 +218,14 @@ export default function Navbar() {
             </Link>
           ))}
           <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
+            <Link
+              to="/admin"
+              className={`px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all ${
+                isLight ? 'text-purple-700 bg-purple-50 hover:bg-purple-100' : 'text-purple-300 bg-purple-500/10 hover:bg-purple-500/20'
+              }`}
+            >
+              <Shield size={16} /> Admin Command Center
+            </Link>
             {isAuthenticated ? (
               <button onClick={handleSignOut} className="btn-secondary text-sm py-2.5 text-center text-red-500">
                 Log out

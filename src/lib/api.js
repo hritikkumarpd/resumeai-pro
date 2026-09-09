@@ -26,15 +26,24 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
-    if (error.response?.status === 401) {
+    const isAuthEndpoint = error.config?.url?.includes('/auth/login') ||
+                           error.config?.url?.includes('/auth/register') ||
+                           error.config?.url?.includes('/auth/forgot-password')
+
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       // Try to refresh session
-      const { data } = await supabase.auth.refreshSession()
-      if (data?.session) {
-        error.config.headers.Authorization = `Bearer ${data.session.access_token}`
-        return api.request(error.config)
+      try {
+        const { data } = await supabase.auth.refreshSession()
+        if (data?.session) {
+          error.config.headers.Authorization = `Bearer ${data.session.access_token}`
+          return api.request(error.config)
+        }
+      } catch (_) {}
+
+      // If refresh fails and not already on /login, redirect
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
       }
-      // If refresh fails, redirect to login
-      window.location.href = '/login'
     }
     return Promise.reject(error)
   }
@@ -98,4 +107,30 @@ export const paymentApi = {
   verify:      (data) => api.post('/payment/verify', data),
 }
 
+/* ── Admin ─────────────────────────────────────────────────────── */
+export const adminApi = {
+  getStats: (secret) =>
+    api.get('/admin/stats', {
+      headers: { 'X-Admin-Secret': secret }
+    }),
+  getUsers: (secret, page = 0, search = '') =>
+    api.get('/admin/users', {
+      headers: { 'X-Admin-Secret': secret },
+      params: { page, search }
+    }),
+  updateUserPlan: (secret, id, plan) =>
+    api.put(`/admin/users/${id}/plan`, { plan }, {
+      headers: { 'X-Admin-Secret': secret }
+    }),
+  deleteUser: (secret, id) =>
+    api.delete(`/admin/users/${id}`, {
+      headers: { 'X-Admin-Secret': secret }
+    }),
+  getResumes: (secret) =>
+    api.get('/admin/resumes', {
+      headers: { 'X-Admin-Secret': secret }
+    }),
+}
+
 export default api
+

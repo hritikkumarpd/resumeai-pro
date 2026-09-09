@@ -1,4 +1,5 @@
 const router = require('express').Router()
+const { requireAuth } = require('../middleware/requireAuth')
 
 // Helper: Call Google Gemini API
 async function callGemini(prompt, apiKey) {
@@ -20,7 +21,7 @@ async function callGemini(prompt, apiKey) {
 }
 
 // POST /api/ai/enhance-summary
-router.post('/enhance-summary', async (req, res) => {
+router.post('/enhance-summary', requireAuth, async (req, res) => {
   const { summary, role, skills } = req.body
   const apiKey = req.headers['x-gemini-key'] || req.headers['x-api-key'] || process.env.GEMINI_API_KEY
 
@@ -49,7 +50,7 @@ Output ONLY the final summary paragraph. No quotes or markdown.`
 })
 
 // POST /api/ai/enhance-bullets
-router.post('/enhance-bullets', async (req, res) => {
+router.post('/enhance-bullets', requireAuth, async (req, res) => {
   const { bullets, role, company } = req.body
   const apiKey = req.headers['x-gemini-key'] || req.headers['x-api-key'] || process.env.GEMINI_API_KEY
 

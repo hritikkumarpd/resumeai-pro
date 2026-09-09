@@ -4,24 +4,53 @@ const { requireAdmin }  = require('../middleware/requireAdmin')
 
 /* ── GET /api/admin/stats ───────────────────────────────────── */
 router.get('/stats', requireAdmin, async (req, res) => {
-  // Pull from admin_stats view
-  const { data: stats, error: statsErr } = await supabaseAdmin
-    .from('admin_stats')
-    .select('*')
-    .single()
+  // Pull from admin_stats view with safe fallback
+  let statsData = {}
+  try {
+    const { data: stats } = await supabaseAdmin
+      .from('admin_stats')
+      .select('*')
+      .single()
+    if (stats) statsData = stats
+  } catch (_) {}
+
+  // Fallback counts if view is not configured
+  if (!statsData.total_users) {
+    try {
+      const [{ count: uCount }, { count: rCount }, { count: pCount }] = await Promise.all([
+        supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }),
+        supabaseAdmin.from('resumes').select('*', { count: 'exact', head: true }),
+        supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).neq('plan', 'free'),
+      ])
+      statsData = {
+        total_users: uCount || 0,
+        total_resumes: rCount || 0,
+        pro_users: pCount || 0,
+        ...statsData
+      }
+    } catch (_) {}
+  }
 
   // Recent signups (last 10)
-  const { data: recentUsers } = await supabaseAdmin
-    .from('profiles')
-    .select('id, full_name, plan, created_at')
-    .order('created_at', { ascending: false })
-    .limit(10)
+  let recentUsers = []
+  try {
+    const { data: users } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name, plan, created_at')
+      .order('created_at', { ascending: false })
+      .limit(10)
+    if (users) recentUsers = users
+  } catch (_) {}
 
   // Signups per day (last 7 days)
-  const { data: dailySignups } = await supabaseAdmin.rpc('signups_per_day').catch(() => ({ data: [] }))
+  let dailySignups = []
+  try {
+    const rpcRes = await supabaseAdmin.rpc('signups_per_day')
+    if (rpcRes?.data) dailySignups = rpcRes.data
+  } catch (_) {}
 
   res.json({
-    ...(stats || {}),
+    ...statsData,
     recent_users:  recentUsers  || [],
     daily_signups: dailySignups || [],
   })
@@ -47,14 +76,23 @@ router.get('/users', requireAdmin, async (req, res) => {
   if (error) return res.status(500).json({ error: error.message })
 
   // Get emails from auth.users (requires service role)
-  const userIds = (data || []).map(u => u.id)
-  const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ perPage: limit })
   const emailMap = {}
-  ;(authUsers?.users || []).forEach(u => { emailMap[u.id] = u.email })
+  try {
+    await Promise.all(
+      (data || []).map(async (u) => {
+        try {
+          const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(u.id)
+          if (authUser?.user?.email) {
+            emailMap[u.id] = authUser.user.email
+          }
+        } catch (_) {}
+      })
+    )
+  } catch (_) {}
 
   const enriched = (data || []).map(u => ({
     ...u,
-    email: emailMap[u.id] || 'unknown',
+    email: emailMap[u.id] || 'Not specified',
   }))
 
   res.json({ data: enriched, total: count, page, limit })

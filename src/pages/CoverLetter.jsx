@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { Sparkles, Copy, Download, RefreshCw, Mail, CheckCircle } from 'lucide-react'
+import { Sparkles, Copy, Download, RefreshCw, Mail, CheckCircle, Save, CheckCircle2 } from 'lucide-react'
 import { generateCoverLetterWithAI } from '../lib/aiService'
 import { useAuth } from '../context/AuthContext'
+import { coverLetterApi } from '../lib/api'
 
 const TEMPLATES = [
   'Standard Professional',
@@ -51,6 +52,9 @@ export default function CoverLetter() {
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [lastForm, setLastForm] = useState(null)
   const [template, setTemplate] = useState(TEMPLATES[0])
   const [tone, setTone] = useState(TONES[0])
   const { register, handleSubmit, reset, formState: { errors } } = useForm()
@@ -73,7 +77,9 @@ export default function CoverLetter() {
   const generate = async (data) => {
     setGenerating(true)
     setGenerated(false)
+    setSaved(false)
     setLetter('')
+    setLastForm(data)
     
     let full = await generateCoverLetterWithAI({ ...data, tone })
     if (!full) {
@@ -88,6 +94,42 @@ export default function CoverLetter() {
     setLetter(full)
     setGenerating(false)
     setGenerated(true)
+
+    // Automatically persist to user's dashboard if logged in
+    if (user) {
+      try {
+        await coverLetterApi.create({
+          title: `${data.role || 'Job'} Cover Letter (${data.company || 'General'})`,
+          content: full,
+          job_role: data.role || '',
+          company: data.company || '',
+          tone,
+        })
+        setSaved(true)
+      } catch (saveErr) {
+        console.warn('Auto-save cover letter skipped:', saveErr?.message)
+      }
+    }
+  }
+
+  const handleManualSave = async () => {
+    if (!letter || !user) return
+    setSaving(true)
+    try {
+      await coverLetterApi.create({
+        title: `${lastForm?.role || 'Job'} Cover Letter (${lastForm?.company || 'General'})`,
+        content: letter,
+        job_role: lastForm?.role || '',
+        company: lastForm?.company || '',
+        tone,
+      })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3500)
+    } catch (err) {
+      console.error('Failed to save cover letter:', err)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const copyToClipboard = () => {
@@ -192,20 +234,38 @@ export default function CoverLetter() {
             <div className="lg:col-span-3">
               {/* Toolbar */}
               {generated && (
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xs text-slate-500 flex items-center gap-1.5 mr-auto">
-                    <CheckCircle size={12} className="text-emerald-400" /> Cover letter generated
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <span className="text-xs text-slate-400 flex items-center gap-1.5 mr-auto">
+                    {saved ? (
+                      <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                        <CheckCircle2 size={13} /> Saved to Dashboard
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-slate-400">
+                        <CheckCircle size={13} className="text-emerald-400" /> Generated
+                      </span>
+                    )}
                   </span>
+                  {user && (
+                    <button
+                      onClick={handleManualSave}
+                      disabled={saving}
+                      className="btn-secondary text-xs px-3 py-2 rounded-lg gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <Save size={12} className={saved ? 'text-emerald-400' : 'text-purple-400'} />
+                      <span>{saving ? 'Saving...' : saved ? 'Saved' : 'Save'}</span>
+                    </button>
+                  )}
                   <button onClick={copyToClipboard}
-                          className="btn-secondary text-xs px-4 py-2 rounded-lg gap-1.5">
+                          className="btn-secondary text-xs px-3 py-2 rounded-lg gap-1.5 cursor-pointer">
                     {copied ? <><CheckCircle size={12} className="text-emerald-400" /> Copied!</> : <><Copy size={12} /> Copy</>}
                   </button>
                   <button onClick={downloadTxt}
-                          className="btn-secondary text-xs px-4 py-2 rounded-lg gap-1.5">
+                          className="btn-secondary text-xs px-3 py-2 rounded-lg gap-1.5 cursor-pointer">
                     <Download size={12} /> Download
                   </button>
-                  <button onClick={() => { setLetter(''); setGenerated(false) }}
-                          className="btn-secondary text-xs px-4 py-2 rounded-lg gap-1.5">
+                  <button onClick={() => { setLetter(''); setGenerated(false); setSaved(false) }}
+                          className="btn-secondary text-xs px-3 py-2 rounded-lg gap-1.5 cursor-pointer">
                     <RefreshCw size={12} /> Reset
                   </button>
                 </div>

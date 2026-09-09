@@ -98,6 +98,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     .from('resumes')
     .update(updates)
     .eq('id', req.params.id)
+    .eq('user_id', req.user.id)
     .select()
     .single()
 
@@ -114,11 +115,30 @@ router.delete('/:id', requireAuth, async (req, res) => {
     .eq('user_id', req.user.id)
 
   if (error) return res.status(500).json({ error: error.message })
+
+  // Decrement resume count in profile
+  await supabaseAdmin.rpc('decrement_resume_count', { user_id: req.user.id }).catch(() => {})
+
   res.json({ message: 'Resume deleted successfully.' })
 })
 
 /* ── POST /api/resumes/:id/duplicate ───────────────────────── */
 router.post('/:id/duplicate', requireAuth, async (req, res) => {
+  // Enforce free plan limit on duplicate
+  if (req.profile?.plan === 'free') {
+    const { count } = await supabaseAdmin
+      .from('resumes')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', req.user.id)
+
+    if (count >= FREE_PLAN_LIMIT) {
+      return res.status(403).json({
+        error: `Free plan allows up to ${FREE_PLAN_LIMIT} resumes. Upgrade to Pro for unlimited resumes.`,
+        upgrade_url: `${process.env.FRONTEND_URL}/pricing`,
+      })
+    }
+  }
+
   const { data: original, error: fetchErr } = await supabaseAdmin
     .from('resumes')
     .select('*')
@@ -142,6 +162,10 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
     .single()
 
   if (error) return res.status(500).json({ error: error.message })
+
+  // Increment resume count
+  await supabaseAdmin.rpc('increment_resume_count', { user_id: req.user.id }).catch(() => {})
+
   res.status(201).json(copy)
 })
 

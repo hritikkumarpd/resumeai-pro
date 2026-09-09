@@ -20,18 +20,31 @@ const aiRoutes          = require('./routes/ai')
 const app  = express()
 const PORT = process.env.PORT || 4000
 
+/* ── Reverse Proxy Configuration (Render/Railway/Vercel) ─────── */
+app.set('trust proxy', 1)
+
 /* ── Security & Middleware ──────────────────────────────────── */
 app.use(helmet())
 app.use(compression())
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 
-// CORS — allow frontend origins
+// CORS — allow only verified frontend origins
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'https://resumeaipro.vercel.app',
+  'https://resumeaihritik.vercel.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+].filter(Boolean)
+
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:5173',
-    'https://resumeaipro.vercel.app',
-    /\.vercel\.app$/,
-  ],
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true)
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true)
+    }
+    return callback(new Error('Cross-Origin Request Blocked by CORS Policy'))
+  },
   credentials: true,
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization','X-Admin-Secret'],

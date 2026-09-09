@@ -1,0 +1,38 @@
+# Render.com deployment config for the Express API server
+# See: https://render.com/docs/render-yaml
+
+services:
+  - type: web
+    name: resumeai-pro-api
+    runtime: node
+    region: singapore   # Change to your nearest: oregon, frankfurt, singapore
+    plan: free           # free tier — upgrades automatically
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        sync: false      # Set in Render dashboard
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: ADMIN_SECRET
+        generateValue: true  # Render auto-generates a secure random value
+      # Add these when you enable payments:
+      # - key: RAZORPAY_KEY_ID
+      #   sync: false
+      # - key: RAZORPAY_KEY_SECRET
+      #   sync: false
+      # - key: RESEND_API_KEY
+      #   sync: false
+    healthCheckPath: /health
+    autoDeploy: true     # Auto-deploy on git push

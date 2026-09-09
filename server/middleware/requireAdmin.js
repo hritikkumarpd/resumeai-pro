@@ -1,0 +1,14 @@
+/**
+ * Middleware: restrict to admin users.
+ * Checks X-Admin-Secret header against env var.
+ * For production, replace with a proper admin role check in Supabase.
+ */
+function requireAdmin(req, res, next) {
+  const secret = req.headers['x-admin-secret']
+  if (!secret || secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Forbidden — admin access only.' })
+  }
+  next()
+}
+
+module.exports = { requireAdmin }

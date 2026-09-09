@@ -148,7 +148,24 @@
   .resume-card-hover:hover {
     border-color: rgba(124,58,237,0.6);
     transform: translateY(-4px);
-    box-shadow: 0 0 40px rgba(124,58,237,0.4);
+    box-shadow: 0 12px 30px rgba(124,58,237,0.25);
+  }
+
+  /* Select & Option dropdown styling for 100% contrast on all OS / themes */
+  select {
+    color-scheme: light dark;
+  }
+  select option, select optgroup {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    padding: 8px 12px;
+  }
+  html:not(.light) select option,
+  html:not(.light) select optgroup,
+  :root:not([data-theme='light']) select option,
+  :root:not([data-theme='light']) select optgroup {
+    background-color: #141842 !important;
+    color: #f8fafc !important;
   }
 }
 

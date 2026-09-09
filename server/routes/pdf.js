@@ -1,12 +1,89 @@
 const router = require('express').Router()
 const { requireAuth } = require('../middleware/requireAuth')
 
+const fs = require('fs')
+
+function getChromeExecutablePath() {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH
+  }
+  const paths = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+  ]
+  for (const p of paths) {
+    if (fs.existsSync(p)) return p
+  }
+  return undefined
+}
+
+/* ── POST /api/pdf/render-html (Direct Vector PDF from Client HTML) ── */
+/**
+ * Renders raw HTML sent from frontend into a 100% vector, selectable PDF
+ * with fully active clickable hyperlinks using headless Puppeteer Chrome.
+ */
+router.post('/render-html', async (req, res) => {
+  const { html, name = 'Resume' } = req.body
+
+  if (!html) {
+    return res.status(400).json({ error: 'Resume HTML is required.' })
+  }
+
+  try {
+    const puppeteer = require('puppeteer')
+    const executablePath = getChromeExecutablePath()
+    const browser = await puppeteer.launch({
+      executablePath,
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--font-render-hinting=medium'
+      ],
+    })
+
+    const page = await browser.newPage()
+    // 96 DPI A4 viewport
+    await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 })
+    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 30000 })
+
+    const pdf = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      preferCSSPageSize: true,
+      tagged: true, // Enables selectable text layer & PDF accessibility
+      outline: true,
+    })
+
+    await browser.close()
+
+    const safeName = (name || 'Resume').replace(/[^a-zA-Z0-9_-]/g, '_')
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${safeName}_ATS_Resume.pdf"`,
+      'Content-Length': pdf.length,
+    })
+    res.end(pdf)
+  } catch (err) {
+    console.error('PDF render-html error:', err)
+    res.status(500).json({ error: 'PDF generation failed: ' + err.message })
+  }
+})
+
 /* ── POST /api/pdf/generate ─────────────────────────────────── */
 /**
- * Generates a PDF from resume HTML using Puppeteer.
- * Frontend sends resume data → server renders HTML → returns PDF buffer with active clickable hyperlinks.
+ * Generates a PDF from resume data using Puppeteer.
  */
-router.post('/generate', requireAuth, async (req, res) => {
+router.post('/generate', async (req, res) => {
   const { resumeData, accentColor = '#7C3AED', font = 'Inter' } = req.body
 
   if (!resumeData || !resumeData.personal) {
@@ -17,10 +94,10 @@ router.post('/generate', requireAuth, async (req, res) => {
   const html = buildResumeHtml(resumeData, accentColor, font)
 
   try {
-    // Lazy-load puppeteer to avoid startup overhead
     const puppeteer = require('puppeteer')
-
+    const executablePath = getChromeExecutablePath()
     const browser = await puppeteer.launch({
+      executablePath,
       headless: 'new',
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     })
@@ -32,6 +109,7 @@ router.post('/generate', requireAuth, async (req, res) => {
       format: 'A4',
       printBackground: true,
       margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      tagged: true,
     })
 
     await browser.close()

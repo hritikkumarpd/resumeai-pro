@@ -1,40 +1,22 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, FileText, Target, Mail, CreditCard,
   Settings, LogOut, Plus, TrendingUp,
   Zap, Clock, Star, Download, Edit2, Trash2,
   User, Briefcase, Phone, MapPin, Globe, Check, AlertCircle,
-  Save, Key, ShieldCheck, Sparkles, ExternalLink, ArrowRight
+  Save, Key, ShieldCheck, Sparkles, ExternalLink, ArrowRight,
+  Loader2, LayoutTemplate, RefreshCw
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { supabase } from '../lib/supabase'
-
-const sampleResumes = [
-  { id: 1, title: 'Software Engineer Resume', template: 'Modern Dark', atsScore: 92, lastEdited: '2 hours ago', status: 'active' },
-  { id: 2, title: 'Product Manager Resume',   template: 'Executive',   atsScore: 78, lastEdited: '3 days ago',  status: 'draft'  },
-  { id: 3, title: 'Data Scientist Resume',    template: 'Minimal',     atsScore: 85, lastEdited: '1 week ago',  status: 'active' },
-]
-
-const stats = [
-  { label: 'Resumes Created', value: '3',   change: '+1 this week', up: true,  icon: FileText    },
-  { label: 'Avg ATS Score',   value: '85%', change: '+7% vs last',  up: true,  icon: TrendingUp  },
-  { label: 'Cover Letters',   value: '2',   change: 'Created',      up: true,  icon: Mail        },
-  { label: 'Applications',    value: '14',  change: '3 interviews!', up: true,  icon: Star        },
-]
-
-const activities = [
-  { action: 'Edited Software Engineer Resume',   time: '2 hours ago',   icon: Edit2,       color: '#7C3AED' },
-  { action: 'ATS Score improved to 92%',          time: '2 hours ago',   icon: TrendingUp,  color: '#10B981' },
-  { action: 'Downloaded Product Manager Resume', time: '3 days ago',   icon: Download,    color: '#06B6D4' },
-  { action: 'Created Data Scientist Resume',     time: '1 week ago',    icon: FileText,    color: '#F59E0B' },
-  { action: 'Generated Cover Letter for Meta',   time: '1 week ago',    icon: Mail,        color: '#EC4899' },
-]
+import { resumeApi, coverLetterApi } from '../lib/api'
+import { resumeStorage } from '../lib/resumeStorage'
 
 const navItems = [
   { id: 'dashboard',   icon: LayoutDashboard, label: 'Dashboard',    isTab: true },
-  { id: 'resumes',     icon: FileText,        label: 'My Resumes',   href: '/builder' },
+  { id: 'resumes',     icon: FileText,        label: 'My Resumes',   isTab: true },
   { id: 'ats',         icon: Target,          label: 'ATS Checker',  href: '/ats-checker' },
   { id: 'cover-letter',icon: Mail,            label: 'Cover Letters',href: '/cover-letter' },
   { id: 'templates',   icon: Star,            label: 'Templates',    href: '/templates' },
@@ -42,7 +24,29 @@ const navItems = [
   { id: 'settings',    icon: Settings,        label: 'Settings',     isTab: true },
 ]
 
+/* ── Relative time helper ──────────────────────────────────── */
+function timeAgo(dateStr) {
+  if (!dateStr) return ''
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now - date
+  const diffSec = Math.floor(diffMs / 1000)
+  const diffMin = Math.floor(diffSec / 60)
+  const diffHr = Math.floor(diffMin / 60)
+  const diffDay = Math.floor(diffHr / 24)
+  const diffWeek = Math.floor(diffDay / 7)
+  const diffMonth = Math.floor(diffDay / 30)
+
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin} min${diffMin > 1 ? 's' : ''} ago`
+  if (diffHr < 24) return `${diffHr} hour${diffHr > 1 ? 's' : ''} ago`
+  if (diffDay < 7) return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`
+  if (diffWeek < 5) return `${diffWeek} week${diffWeek > 1 ? 's' : ''} ago`
+  return `${diffMonth} month${diffMonth > 1 ? 's' : ''} ago`
+}
+
 function ScoreRing({ score, size = 64 }) {
+  if (score == null) return null
   const r = (size - 8) / 2
   const circ = 2 * Math.PI * r
   const dash = (score / 100) * circ
@@ -68,8 +72,8 @@ export default function Dashboard() {
   const isLight = theme === 'light'
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-
-  const activeTab = searchParams.get('tab') === 'settings' ? 'settings' : 'dashboard'
+  const tabParam = searchParams.get('tab')
+  const activeTab = tabParam === 'settings' ? 'settings' : tabParam === 'resumes' ? 'resumes' : 'dashboard'
 
   // Dynamic logged in user names
   const fullName = profile?.full_name || user?.user_metadata?.full_name || ''
@@ -77,6 +81,113 @@ export default function Dashboard() {
   const displayName = fullName || (user?.email ? user.email.split('@')[0] : 'User')
   const userInitial = (firstName || 'U')[0].toUpperCase()
   const planLabel = (profile?.plan === 'lifetime') ? 'Lifetime Pro' : (profile?.plan === 'pro') ? 'Pro Plan' : 'Free Plan'
+
+  // ── Real Data State ──────────────────────────────────────────
+  const [resumes, setResumes] = useState([])
+  const [coverLetters, setCoverLetters] = useState([])
+  const [loadingData, setLoadingData] = useState(true)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+
+  // Fetch real data from storage + API
+  const fetchDashboardData = useCallback(async () => {
+    setLoadingData(true)
+    try {
+      const [resumeList, clRes] = await Promise.allSettled([
+        resumeStorage.list(user),
+        coverLetterApi.list(),
+      ])
+      if (resumeList.status === 'fulfilled') setResumes(resumeList.value || [])
+      if (clRes.status === 'fulfilled') setCoverLetters(clRes.value.data || [])
+    } catch (err) {
+      console.warn('Failed to fetch dashboard data:', err)
+    } finally {
+      setLoadingData(false)
+    }
+  }, [user])
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [fetchDashboardData])
+
+  // Compute real stats
+  const resumeCount = resumes.length
+  const avgAts = resumeCount > 0
+    ? Math.round(resumes.reduce((sum, r) => sum + (r.ats_score || 0), 0) / resumes.filter(r => r.ats_score != null).length) || 0
+    : 0
+  const hasAtsScores = resumes.some(r => r.ats_score != null)
+  const coverLetterCount = coverLetters.length
+  const uniqueTemplates = new Set(resumes.map(r => r.template).filter(Boolean)).size
+
+  const computedStats = [
+    { label: 'Resumes Created', value: String(resumeCount), change: resumeCount > 0 ? `${resumeCount} total` : 'Create your first!', up: resumeCount > 0, icon: FileText },
+    { label: 'Avg ATS Score', value: hasAtsScores ? `${avgAts}%` : 'N/A', change: hasAtsScores ? 'From your resumes' : 'No scores yet', up: avgAts >= 70, icon: TrendingUp },
+    { label: 'Cover Letters', value: String(coverLetterCount), change: coverLetterCount > 0 ? `${coverLetterCount} created` : 'Create one', up: coverLetterCount > 0, icon: Mail },
+    { label: 'Templates Used', value: String(uniqueTemplates), change: uniqueTemplates > 0 ? `${uniqueTemplates} different` : 'Try templates!', up: uniqueTemplates > 0, icon: LayoutTemplate },
+  ]
+
+  // Generate real activity feed from resume/cover letter data
+  const realActivities = [
+    ...resumes.map(r => ({
+      action: r.updated_at !== r.created_at
+        ? `Edited "${r.title}"`
+        : `Created "${r.title}"`,
+      time: timeAgo(r.updated_at || r.created_at),
+      date: new Date(r.updated_at || r.created_at),
+      icon: r.updated_at !== r.created_at ? Edit2 : FileText,
+      color: r.updated_at !== r.created_at ? '#7C3AED' : '#F59E0B',
+    })),
+    ...coverLetters.map(cl => ({
+      action: `Created cover letter "${cl.title || 'Untitled'}"`,
+      time: timeAgo(cl.created_at),
+      date: new Date(cl.created_at),
+      icon: Mail,
+      color: '#EC4899',
+    })),
+  ].sort((a, b) => b.date - a.date).slice(0, 8)
+
+  // Recently made resumes (within last 7 days)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const recentResumes = resumes.filter(r => new Date(r.updated_at || r.created_at) >= sevenDaysAgo)
+
+  // Delete resume handler
+  const handleDeleteResume = async (id) => {
+    try {
+      await resumeStorage.delete(id, user)
+      setResumes(prev => prev.filter(r => r.id !== id))
+      setDeleteConfirm(null)
+    } catch (err) {
+      console.error('Failed to delete resume:', err)
+    }
+  }
+
+  // Resume Renaming State (e.g. Data Science Resume, AIML Resume)
+  const [renamingId, setRenamingId] = useState(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [isRenaming, setIsRenaming] = useState(false)
+
+  const handleStartRename = (resume, e) => {
+    if (e) e.stopPropagation()
+    setRenamingId(resume.id)
+    setRenameValue(resume.title || 'My Resume')
+  }
+
+  const handleSaveRename = async (id, overrideValue) => {
+    const finalTitle = (overrideValue !== undefined ? overrideValue : renameValue).trim()
+    if (!finalTitle) {
+      setRenamingId(null)
+      return
+    }
+    setIsRenaming(true)
+    try {
+      await resumeStorage.rename(id, finalTitle, user)
+      setResumes(prev => prev.map(r => r.id === id ? { ...r, title: finalTitle } : r))
+      setRenamingId(null)
+    } catch (err) {
+      console.error('Failed to rename resume:', err)
+    } finally {
+      setIsRenaming(false)
+    }
+  }
 
   // Settings State
   const [settingsTab, setSettingsTab] = useState('resume_profile') // 'resume_profile' | 'account'
@@ -189,7 +300,7 @@ export default function Dashboard() {
 
         {navItems.map((item) => {
           const isActive = item.isTab
-            ? (item.id === 'settings' ? activeTab === 'settings' : activeTab === 'dashboard')
+            ? activeTab === item.id
             : false
 
           if (item.isTab) {
@@ -198,9 +309,10 @@ export default function Dashboard() {
                 key={item.label}
                 onClick={() => {
                   if (item.id === 'settings') setSearchParams({ tab: 'settings' })
+                  else if (item.id === 'resumes') setSearchParams({ tab: 'resumes' })
                   else setSearchParams({})
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 text-left ${
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 text-left cursor-pointer ${
                   isActive
                     ? 'text-purple-400 bg-purple-500/20 border border-purple-500/30 font-semibold shadow-sm'
                     : isLight
@@ -362,7 +474,7 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Full Name */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-300">
+                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Full Name <span className="text-purple-400">*</span>
                       </label>
                       <div className="relative">
@@ -380,7 +492,7 @@ export default function Dashboard() {
 
                     {/* Professional Title */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-300">
+                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Target Job Title / Role
                       </label>
                       <div className="relative">
@@ -397,7 +509,7 @@ export default function Dashboard() {
 
                     {/* Email */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-300">
+                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Email Address (for Resumes)
                       </label>
                       <div className="relative">
@@ -414,7 +526,7 @@ export default function Dashboard() {
 
                     {/* Phone */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-300">
+                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Phone Number
                       </label>
                       <div className="relative">
@@ -431,7 +543,7 @@ export default function Dashboard() {
 
                     {/* Location */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-300">
+                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Location / City
                       </label>
                       <div className="relative">
@@ -448,7 +560,7 @@ export default function Dashboard() {
 
                     {/* LinkedIn */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-300">
+                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         LinkedIn Profile URL
                       </label>
                       <div className="relative">
@@ -465,7 +577,7 @@ export default function Dashboard() {
 
                     {/* Portfolio / Website */}
                     <div className="flex flex-col gap-1.5 md:col-span-2">
-                      <label className="text-xs font-semibold text-slate-300">
+                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Portfolio / GitHub / Website
                       </label>
                       <div className="relative">
@@ -497,7 +609,7 @@ export default function Dashboard() {
                   <div className="space-y-4">
                     {/* Summary */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-300">
+                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Default Professional Summary
                       </label>
                       <textarea
@@ -514,7 +626,7 @@ export default function Dashboard() {
 
                     {/* Skills */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-300">
+                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Default Core Skills (Comma-separated)
                       </label>
                       <input
@@ -614,7 +726,7 @@ export default function Dashboard() {
                     )}
 
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-300">New Password</label>
+                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>New Password</label>
                       <input
                         type="password"
                         value={newPassword}
@@ -625,7 +737,7 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-300">Confirm New Password</label>
+                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Confirm New Password</label>
                       <input
                         type="password"
                         value={confirmPassword}
@@ -647,6 +759,186 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+        ) : activeTab === 'resumes' ? (
+          /* ═════════════════════════════════════════════════════════════ */
+          /* MY RESUMES VIEW (Dedicated Page)                            */
+          /* ═════════════════════════════════════════════════════════════ */
+          <div>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className="font-heading font-bold text-2xl mb-1 flex items-center gap-2">
+                  <FileText className="text-purple-400" /> My Resumes
+                </h1>
+                <p className={`text-sm ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Manage, edit, export, and create new ATS-optimized resumes.
+                </p>
+              </div>
+              <Link to="/builder" className="btn-primary gap-2 text-sm px-5 py-2.5 rounded-xl font-semibold shadow-lg shadow-purple-600/30 cursor-pointer">
+                <Plus size={16} /> Create New Resume
+              </Link>
+            </div>
+
+            {/* Resumes Grid */}
+            {resumes.length === 0 ? (
+              <div className={`p-12 rounded-3xl border text-center ${
+                isLight ? 'bg-white border-slate-200' : 'bg-[#111338] border-purple-500/20'
+              }`}>
+                <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-4 text-purple-400">
+                  <FileText size={32} />
+                </div>
+                <h3 className="font-heading font-bold text-lg mb-2">No resumes saved yet</h3>
+                <p className={`text-sm max-w-md mx-auto mb-6 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                  You haven't created or saved any resumes yet. Start building your ATS-friendly resume now!
+                </p>
+                <Link to="/builder" className="btn-primary gap-2 text-sm px-6 py-3 rounded-xl font-semibold inline-flex items-center shadow-lg shadow-purple-600/30 cursor-pointer">
+                  <Plus size={16} /> Create Your First Resume
+                </Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {resumes.map((r) => (
+                  <div
+                    key={r.id}
+                    className={`group relative p-5 rounded-2xl border transition-all duration-200 hover:-translate-y-1 hover:shadow-xl flex flex-col justify-between ${
+                      isLight
+                        ? 'bg-white border-slate-200 hover:border-purple-300 hover:shadow-purple-500/10'
+                        : 'bg-[#111338] border-purple-500/20 hover:border-purple-500/50 hover:shadow-purple-500/20'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                          <FileText size={20} />
+                        </div>
+                        {r.ats_score != null && (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                            <span>{r.ats_score}% ATS</span>
+                          </div>
+                        )}
+                      </div>
+                      {renamingId === r.id ? (
+                        <div className="mb-3" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <input
+                              type="text"
+                              value={renameValue}
+                              onChange={(e) => setRenameValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveRename(r.id)
+                                if (e.key === 'Escape') setRenamingId(null)
+                              }}
+                              autoFocus
+                              placeholder="e.g. Data Science Resume"
+                              className="form-input text-xs py-1.5 px-2.5 flex-1 font-semibold rounded-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveRename(r.id)}
+                              disabled={isRenaming}
+                              className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors cursor-pointer"
+                              title="Save Name"
+                            >
+                              <Check size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRenamingId(null)}
+                              className="p-1.5 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors cursor-pointer text-xs"
+                              title="Cancel"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          {/* Quick Name Presets */}
+                          <div className="flex flex-wrap gap-1">
+                            {['Data Science Resume', 'AIML Resume', 'Full Stack Resume', 'Software Engineer'].map(preset => (
+                              <button
+                                key={preset}
+                                type="button"
+                                onClick={() => handleSaveRename(r.id, preset)}
+                                className="text-[10px] px-2 py-0.5 rounded-md bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 hover:text-white border border-purple-500/30 transition-colors cursor-pointer"
+                              >
+                                + {preset}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mb-2">
+                          <div className="flex items-center gap-2 group/title">
+                            <h3 className="font-heading font-bold text-base truncate flex-1" title={r.title}>
+                              {r.title}
+                            </h3>
+                            <button
+                              type="button"
+                              onClick={(e) => handleStartRename(r, e)}
+                              className="p-1 text-slate-400 hover:text-purple-400 rounded transition-colors cursor-pointer opacity-70 hover:opacity-100"
+                              title="Rename this resume (e.g. Data Science Resume, AIML Resume)"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                          </div>
+                          <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {r.template || 'Classic ATS'} · Updated {timeAgo(r.updated_at || r.created_at)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-white/10 mt-2">
+                      <Link
+                        to={`/builder?id=${r.id}`}
+                        className="btn-primary text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 font-semibold cursor-pointer"
+                      >
+                        <Edit2 size={12} /> Edit Resume
+                      </Link>
+                      <div className="flex items-center gap-1">
+                        <Link
+                          to={`/builder?id=${r.id}`}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-cyan-400 hover:bg-cyan-400/10 transition-all cursor-pointer"
+                          title="Open & Download PDF"
+                        >
+                          <Download size={14} />
+                        </Link>
+                        {deleteConfirm === r.id ? (
+                          <button
+                            onClick={() => handleDeleteResume(r.id)}
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-white bg-red-500 hover:bg-red-600 transition-all cursor-pointer animate-pulse"
+                            title="Confirm Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirm(r.id)}
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-red-400/10 transition-all cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Create New Card */}
+                <Link
+                  to="/builder"
+                  className={`p-6 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all duration-200 hover:-translate-y-1 border-dashed cursor-pointer min-h-[170px] ${
+                    isLight ? 'text-slate-600 hover:text-purple-600' : 'text-slate-400 hover:text-purple-400'
+                  }`}
+                  style={{ background: 'rgba(124,58,237,.04)', border: '2px dashed rgba(124,58,237,.25)' }}
+                >
+                  <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center">
+                    <Plus size={20} />
+                  </div>
+                  <span className="text-sm font-semibold">Create new resume</span>
+                </Link>
+              </div>
+            )}
+          </div>
         ) : (
           /* ═════════════════════════════════════════════════════════════ */
           /* DASHBOARD OVERVIEW                                          */
@@ -658,7 +950,7 @@ export default function Dashboard() {
                 <h1 className="font-heading font-bold text-2xl mb-1">
                   Welcome back, {firstName} 👋
                 </h1>
-                <p className="text-slate-400 text-sm">Here's what's happening with your job search.</p>
+                <p className={`text-sm ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Here's what's happening with your job search.</p>
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -677,7 +969,7 @@ export default function Dashboard() {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              {stats.map(s => (
+              {computedStats.map(s => (
                 <div key={s.label} className={`p-5 rounded-2xl border transition-all hover:-translate-y-0.5 ${
                   isLight ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#111338] border-purple-500/20 shadow-lg'
                 }`}>
@@ -685,13 +977,43 @@ export default function Dashboard() {
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center icon-purple">
                       <s.icon size={16} className="text-white opacity-80" />
                     </div>
+                    {loadingData && (
+                      <Loader2 size={14} className="text-purple-400 animate-spin" />
+                    )}
                   </div>
-                  <div className="font-heading font-extrabold text-3xl gradient-text mb-0.5">{s.value}</div>
-                  <div className="text-slate-400 text-xs">{s.label}</div>
-                  <div className={`text-xs mt-1.5 ${s.up ? 'text-emerald-400' : 'text-red-400'}`}>{s.change}</div>
+                  <div className="font-heading font-extrabold text-3xl gradient-text mb-0.5">{loadingData ? '...' : s.value}</div>
+                  <div className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{s.label}</div>
+                  <div className={`text-xs mt-1.5 ${s.up ? 'text-emerald-400' : isLight ? 'text-slate-400' : 'text-slate-500'}`}>{loadingData ? '' : s.change}</div>
                 </div>
               ))}
             </div>
+
+            {/* Recently Made Resume Highlight */}
+            {recentResumes.length > 0 && !loadingData && (
+              <div className={`mb-6 p-4 rounded-2xl border flex items-center gap-4 ${
+                isLight ? 'bg-purple-50 border-purple-200' : 'bg-purple-500/10 border-purple-500/25'
+              }`}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                     style={{ background: 'linear-gradient(135deg,#7C3AED,#06B6D4)' }}>
+                  <Sparkles size={18} className="text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className={`text-xs font-semibold mb-0.5 ${isLight ? 'text-purple-700' : 'text-purple-300'}`}>Recently Updated</div>
+                  <div className={`text-sm font-bold truncate ${isLight ? 'text-slate-800' : 'text-white'}`}>
+                    {recentResumes[0].title}
+                  </div>
+                  <div className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {recentResumes[0].template || 'No template'} · Updated {timeAgo(recentResumes[0].updated_at)}
+                  </div>
+                </div>
+                <Link
+                  to={`/builder?id=${recentResumes[0].id}`}
+                  className="btn-primary text-xs px-4 py-2 rounded-xl gap-1.5 font-semibold flex-shrink-0"
+                >
+                  <Edit2 size={12} /> Continue Editing
+                </Link>
+              </div>
+            )}
 
             {/* Resumes + Activity Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -699,63 +1021,166 @@ export default function Dashboard() {
               <div className="lg:col-span-2">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="font-heading font-bold text-lg">My Resumes</h2>
-                  <Link to="/builder" className="btn-ghost text-xs text-purple-400 hover:text-purple-300 transition-colors">
-                    View all →
-                  </Link>
+                  <button
+                    onClick={fetchDashboardData}
+                    className={`text-xs flex items-center gap-1 transition-colors ${isLight ? 'text-slate-500 hover:text-slate-700' : 'text-slate-400 hover:text-slate-200'}`}
+                    title="Refresh"
+                  >
+                    <RefreshCw size={12} className={loadingData ? 'animate-spin' : ''} />
+                    <span>Refresh</span>
+                  </button>
                 </div>
-                <div className="flex flex-col gap-4">
-                  {sampleResumes.map(r => (
-                    <div key={r.id} className={`p-5 rounded-2xl flex items-center gap-4 group transition-all duration-200 hover:-translate-y-0.5 border ${
-                      isLight ? 'bg-white border-slate-200 shadow-sm hover:shadow-md' : 'bg-[#111338] border-purple-500/20 shadow-md'
-                    }`}>
-                      {/* Mini resume preview */}
-                      <div className="w-12 h-16 rounded-md overflow-hidden flex-shrink-0 bg-white flex flex-col border border-slate-200">
-                        <div className="h-4 w-full" style={{ background: 'linear-gradient(135deg,#1a1040,#2d1b69)' }} />
-                        <div className="flex-1 p-1 flex flex-col gap-0.5">
-                          {[80,100,60,80,70].map((w,i) => (
-                            <div key={i} className="rounded-sm bg-slate-200" style={{ height: 2, width: `${w}%` }} />
-                          ))}
-                        </div>
-                      </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold text-sm truncate">{r.title}</h3>
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            r.status === 'active' ? 'bg-emerald-400/15 text-emerald-400' : 'bg-slate-700/50 text-slate-400'
-                          }`}>{r.status}</span>
-                        </div>
-                        <div className="text-slate-400 text-xs mb-2">{r.template} · Edited {r.lastEdited}</div>
-                        <div className="flex items-center gap-2">
-                          <ScoreRing score={r.atsScore} size={36} />
-                          <div>
-                            <div className="text-xs font-semibold">{r.atsScore}% ATS</div>
-                            <div className="text-slate-500 text-[10px]">Score</div>
+                {loadingData ? (
+                  <div className={`p-8 rounded-2xl border flex flex-col items-center justify-center gap-3 ${
+                    isLight ? 'bg-white border-slate-200' : 'bg-[#111338] border-purple-500/20'
+                  }`}>
+                    <Loader2 size={28} className="text-purple-400 animate-spin" />
+                    <p className={`text-sm ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Loading your resumes...</p>
+                  </div>
+                ) : resumes.length === 0 ? (
+                  /* Empty State */
+                  <div className={`p-8 rounded-2xl border flex flex-col items-center justify-center gap-4 text-center ${
+                    isLight ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#111338] border-purple-500/20'
+                  }`}>
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                         style={{ background: 'linear-gradient(135deg,rgba(124,58,237,.2),rgba(6,182,212,.15))' }}>
+                      <FileText size={28} className="text-purple-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-heading font-bold text-lg mb-1">No resumes yet</h3>
+                      <p className={`text-sm max-w-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                        Create your first ATS-optimized resume with our AI-powered builder. It takes less than 5 minutes!
+                      </p>
+                    </div>
+                    <Link to="/builder" className="btn-primary gap-2 text-sm px-6 py-3 rounded-xl font-semibold shadow-lg shadow-purple-600/30">
+                      <Plus size={16} /> Create Your First Resume
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {resumes.map(r => (
+                      <div key={r.id} className={`p-5 rounded-2xl flex items-center gap-4 group transition-all duration-200 hover:-translate-y-0.5 border ${
+                        isLight ? 'bg-white border-slate-200 shadow-sm hover:shadow-md' : 'bg-[#111338] border-purple-500/20 shadow-md'
+                      }`}>
+                        {/* Mini resume preview */}
+                        <div className="w-12 h-16 rounded-md overflow-hidden flex-shrink-0 bg-white flex flex-col border border-slate-200">
+                          <div className="h-4 w-full" style={{ background: `linear-gradient(135deg,${r.accent_color || '#1a1040'},${r.accent_color ? r.accent_color + '80' : '#2d1b69'})` }} />
+                          <div className="flex-1 p-1 flex flex-col gap-0.5">
+                            {[80,100,60,80,70].map((w,i) => (
+                              <div key={i} className="rounded-sm bg-slate-200" style={{ height: 2, width: `${w}%` }} />
+                            ))}
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Link to="/builder" className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 transition-all">
-                          <Edit2 size={13} />
-                        </Link>
-                        <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-cyan-400 hover:bg-cyan-400/10 transition-all">
-                          <Download size={13} />
-                        </button>
-                        <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-red-400/10 transition-all">
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                        <div className="flex-1 min-w-0">
+                          {renamingId === r.id ? (
+                            <div className="mb-2">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <input
+                                  type="text"
+                                  value={renameValue}
+                                  onChange={(e) => setRenameValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveRename(r.id)
+                                    if (e.key === 'Escape') setRenamingId(null)
+                                  }}
+                                  autoFocus
+                                  placeholder="e.g. Data Science Resume"
+                                  className="form-input text-xs py-1 px-2 font-semibold rounded-lg w-full max-w-[220px]"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveRename(r.id)}
+                                  className="p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors cursor-pointer"
+                                  title="Save"
+                                >
+                                  <Check size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRenamingId(null)}
+                                  className="p-1 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors cursor-pointer text-xs"
+                                  title="Cancel"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {['Data Science Resume', 'AIML Resume'].map(preset => (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => handleSaveRename(r.id, preset)}
+                                    className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 cursor-pointer"
+                                  >
+                                    + {preset}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold text-sm truncate">{r.title}</h3>
+                              <button
+                                type="button"
+                                onClick={(e) => handleStartRename(r, e)}
+                                className="p-0.5 text-slate-400 hover:text-purple-400 rounded transition-colors cursor-pointer opacity-70 hover:opacity-100"
+                                title="Rename resume"
+                              >
+                                <Edit2 size={12} />
+                              </button>
+                            </div>
+                          )}
+                          <div className={`text-xs mb-2 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {r.template || 'No template'} · Updated {timeAgo(r.updated_at || r.created_at)}
+                          </div>
+                          {r.ats_score != null && (
+                            <div className="flex items-center gap-2">
+                              <ScoreRing score={r.ats_score} size={36} />
+                              <div>
+                                <div className="text-xs font-semibold">{r.ats_score}% ATS</div>
+                                <div className="text-slate-500 text-[10px]">Score</div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
 
-                  <Link to="/builder"
-                        className="p-5 rounded-2xl flex items-center justify-center gap-2.5 text-slate-400 hover:text-purple-400 transition-all duration-200 hover:-translate-y-0.5 border-dashed"
-                        style={{ background: 'rgba(124,58,237,.04)', border: '2px dashed rgba(124,58,237,.2)' }}>
-                    <Plus size={18} />
-                    <span className="text-sm font-medium">Create new resume</span>
-                  </Link>
-                </div>
+                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Link to={`/builder?id=${r.id}`} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 transition-all cursor-pointer" title="Edit Resume">
+                            <Edit2 size={13} />
+                          </Link>
+                          {deleteConfirm === r.id ? (
+                            <button
+                              onClick={() => handleDeleteResume(r.id)}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-white bg-red-500 hover:bg-red-600 transition-all cursor-pointer animate-pulse"
+                              title="Confirm Delete"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setDeleteConfirm(r.id)}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-red-400/10 transition-all cursor-pointer"
+                              title="Delete Resume"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    <Link to="/builder"
+                          className={`p-5 rounded-2xl flex items-center justify-center gap-2.5 transition-all duration-200 hover:-translate-y-0.5 border-dashed cursor-pointer ${
+                            isLight ? 'text-slate-500 hover:text-purple-600' : 'text-slate-400 hover:text-purple-400'
+                          }`}
+                          style={{ background: 'rgba(124,58,237,.04)', border: '2px dashed rgba(124,58,237,.2)' }}>
+                      <Plus size={18} />
+                      <span className="text-sm font-medium">Create new resume</span>
+                    </Link>
+                  </div>
+                )}
               </div>
 
               {/* Activity & Upgrade Banner */}
@@ -764,22 +1189,29 @@ export default function Dashboard() {
                 <div className={`p-5 rounded-2xl border ${
                   isLight ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#111338] border-purple-500/20'
                 }`}>
-                  <div className="flex flex-col gap-4">
-                    {activities.map((a, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-                             style={{ background: `${a.color}20`, border: `1px solid ${a.color}40` }}>
-                          <a.icon size={12} style={{ color: a.color }} />
+                  {realActivities.length === 0 ? (
+                    <div className={`text-center py-6 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
+                      <Clock size={24} className="mx-auto mb-2 opacity-50" />
+                      <p className="text-xs">No activity yet. Create a resume to get started!</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      {realActivities.map((a, i) => (
+                        <div key={i} className="flex items-start gap-3">
+                          <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                               style={{ background: `${a.color}20`, border: `1px solid ${a.color}40` }}>
+                            <a.icon size={12} style={{ color: a.color }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs leading-relaxed ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{a.action}</p>
+                            <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
+                              <Clock size={9} /> {a.time}
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs leading-relaxed ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{a.action}</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
-                            <Clock size={9} /> {a.time}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Upgrade CTA */}
@@ -801,6 +1233,21 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+
+      {/* Delete confirmation overlay */}
+      {deleteConfirm && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+          <div className={`px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 ${
+            isLight ? 'bg-white border border-red-200' : 'bg-[#111338] border border-red-500/30'
+          }`}>
+            <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
+            <span className={`text-sm ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>Click the red delete button again to confirm, or</span>
+            <button onClick={() => setDeleteConfirm(null)} className="text-xs font-semibold text-purple-400 hover:text-purple-300 cursor-pointer">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

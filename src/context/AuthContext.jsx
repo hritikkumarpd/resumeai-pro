@@ -142,13 +142,20 @@ export function AuthProvider({ children }) {
       console.warn('Backend updateProfile skipped:', apiErr?.message)
     }
 
-    // 2. Update Supabase Auth user_metadata
+    // 2. Update Supabase Auth user_metadata (NEVER pass base64 photos to user_metadata as it balloons JWT into HTTP 431!)
     try {
-      const { data: updatedUser, error: authErr } = await supabase.auth.updateUser({
-        data: updates,
-      })
-      if (!authErr && updatedUser?.user) {
-        setUser(updatedUser.user)
+      const safeMetadata = { ...updates }
+      delete safeMetadata.photo
+      if (typeof safeMetadata.avatar_url === 'string' && safeMetadata.avatar_url.startsWith('data:')) {
+        delete safeMetadata.avatar_url
+      }
+      if (Object.keys(safeMetadata).length > 0) {
+        const { data: updatedUser, error: authErr } = await supabase.auth.updateUser({
+          data: safeMetadata,
+        })
+        if (!authErr && updatedUser?.user) {
+          setUser(updatedUser.user)
+        }
       }
     } catch (e) {
       console.warn('Supabase updateUser metadata error:', e?.message)
@@ -157,17 +164,26 @@ export function AuthProvider({ children }) {
     // 3. Update Supabase profiles table directly
     try {
       if (user?.id) {
+        const profileUpdates = {
+          updated_at: new Date().toISOString(),
+        }
+        if (updates.full_name || updates.name) profileUpdates.full_name = updates.full_name || updates.name
+        if (updates.avatar_url || updates.photo !== undefined) profileUpdates.avatar_url = updates.photo || updates.avatar_url || ''
         await supabase
           .from('profiles')
-          .update({
-            full_name: updates.full_name || updates.name,
-            updated_at: new Date().toISOString(),
-          })
+          .update(profileUpdates)
           .eq('id', user.id)
       }
     } catch (_) {}
 
-    // 4. Save to localStorage per user ID for immediate local persistence
+    // 4. Save to localStorage per user ID and global photo key
+    if (updates.photo !== undefined) {
+      if (updates.photo) {
+        localStorage.setItem('resumeai_user_photo', updates.photo)
+      } else {
+        localStorage.removeItem('resumeai_user_photo')
+      }
+    }
     if (user?.id) {
       const storageKey = `user_default_resume_${user.id}`
       const existing = JSON.parse(localStorage.getItem(storageKey) || '{}')
@@ -186,6 +202,7 @@ export function AuthProvider({ children }) {
     if (!user?.id) return {}
     const local = JSON.parse(localStorage.getItem(`user_default_resume_${user.id}`) || '{}')
     const fullName = local.name || local.full_name || profile?.full_name || user.user_metadata?.full_name || ''
+    const savedPhoto = local.photo || profile?.photo || profile?.avatar_url || user.user_metadata?.photo || user.user_metadata?.avatar_url || localStorage.getItem('resumeai_user_photo') || ''
     return {
       name: fullName || (user.email ? user.email.split('@')[0] : ''),
       email: local.email || user.email || '',
@@ -196,6 +213,7 @@ export function AuthProvider({ children }) {
       website: local.website || user.user_metadata?.website || '',
       summary: local.summary || user.user_metadata?.summary || '',
       skills: local.skills || user.user_metadata?.skills || '',
+      photo: savedPhoto,
     }
   }, [user, profile])
 

@@ -5,36 +5,80 @@
  */
 
 export const getStoredGeminiKey = () => {
-  return localStorage.getItem('resumeai_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY || ''
+  try {
+    const custom = localStorage.getItem('resumeai_gemini_api_key')
+    if (custom && custom.trim().length > 10) return custom.trim()
+    const envKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY)
+    if (envKey && envKey.startsWith('AIza')) return envKey.trim()
+  } catch (_) {}
+  return ''
 }
 
 export const setStoredGeminiKey = (key) => {
-  if (key) {
-    localStorage.setItem('resumeai_gemini_api_key', key.trim())
-  } else {
-    localStorage.removeItem('resumeai_gemini_api_key')
-  }
+  try {
+    if (key && key.trim()) {
+      localStorage.setItem('resumeai_gemini_api_key', key.trim())
+    } else {
+      localStorage.removeItem('resumeai_gemini_api_key')
+    }
+  } catch (_) {}
 }
 
 /**
- * Inbuilt High-Precision FAANG Neural Resume Engine (100% Free, Unlimited, Offline-Ready)
- * Transforms resume content using Google's X-Y-Z formula & ATS keyword density.
+ * Intelligent Dynamic Neural Resume Engine (100% Free, Unlimited, Offline-Ready)
+ * Parses actual user input and transforms it using Google's X-Y-Z formula & ATS keyword density.
  */
 function localEnhanceSummary(summary = '', role = '', skills = []) {
-  const cleanRole = role || 'Software Development Engineer (AI & ML)'
-  const skillsList = (skills && skills.length > 0)
-    ? skills.slice(0, 6).join(', ')
-    : 'Python, Java, React, SQL, Cloud Architecture, Machine Learning'
+  const cleanRole = role || 'Technical Professional'
+  const userSkills = (skills && skills.length > 0)
+    ? skills.slice(0, 8).join(', ')
+    : 'System Architecture, Scalable Engineering, Performance Optimization'
   
-  const templates = [
-    `Results-driven ${cleanRole} with demonstrated expertise in Computer Science, Machine Learning, and Full-Stack Engineering. Proven track record of architecting scalable web applications and high-throughput microservices leveraging ${skillsList}. Successfully optimized system response latency by 35%+, engineered resilient CI/CD pipelines, and delivered robust production-grade solutions in collaborative agile environments.`,
-    `High-impact ${cleanRole} offering a solid track record in developing distributed software architectures and data-driven systems. Skilled across ${skillsList}, with a relentless focus on clean code, algorithmic efficiency, and test-driven development. Experienced in reducing query bottlenecks by 40% and deploying mission-critical applications that elevate user engagement and operational reliability.`,
-    `Innovative ${cleanRole} specializing in end-to-end software development and AI-integrated web platforms. Proficient in ${skillsList}, with extensive experience translating complex requirements into performant, fault-tolerant solutions. Dedicated to continuous optimization, reducing production deployment cycles by 30%, and driving engineering best practices within cross-functional teams.`
-  ]
+  const raw = (summary || '').trim()
+  if (!raw) {
+    return `Results-driven ${cleanRole} with a proven background in delivering scalable, high-impact technical solutions. Demonstrated expertise in ${userSkills}, with a dedicated focus on architectural excellence, automated workflows, and quantifiable business outcomes. Adept at accelerating delivery timelines, reducing latency by 35%+, and driving continuous innovation in agile, cross-functional engineering teams.`
+  }
 
-  // Pick template deterministically or semi-randomly based on summary length
-  const idx = Math.abs((summary || '').length + cleanRole.length) % templates.length
-  return templates[idx]
+  // Parse existing sentences from user input
+  const sentences = raw.split(/(?<=[.?!])\s+/).map(s => s.trim().replace(/[.]$/, '')).filter(Boolean)
+  
+  // Transform first sentence into strong professional positioning
+  let firstSentence = sentences[0] || ''
+  firstSentence = firstSentence
+    .replace(/^(i am a|i'm a|myself|looking for|aspiring|fresher)\s+/i, '')
+    .replace(/^(engineer|developer|professional)\s+/i, '')
+    .trim()
+  
+  if (firstSentence && !firstSentence.toLowerCase().includes(cleanRole.toLowerCase())) {
+    firstSentence = `High-impact ${cleanRole} with deep expertise in ${firstSentence}`
+  } else if (!firstSentence) {
+    firstSentence = `Accomplished ${cleanRole} specializing in full-lifecycle execution and ${userSkills}`
+  } else {
+    firstSentence = `Results-oriented ${cleanRole} recognized for ${firstSentence}`
+  }
+  if (!firstSentence.endsWith('.')) firstSentence += '.'
+
+  // Transform second/middle sentences with action verbs and metrics
+  let middleContent = ''
+  if (sentences.length > 1) {
+    const rest = sentences.slice(1).join('. ')
+    middleContent = rest
+      .replace(/\bworked on\b/gi, 'architected and delivered')
+      .replace(/\bresponsible for\b/gi, 'spearheaded end-to-end execution of')
+      .replace(/\bhelped with\b/gi, 'collaborated to engineer')
+      .replace(/\bmade\b/gi, 'deployed scalable')
+      .replace(/\bhandled\b/gi, 'orchestrated and optimized')
+      .replace(/\bfixed\b/gi, 'resolved critical bottlenecks in')
+      .replace(/\bimproved\b/gi, 'streamlined and elevated')
+    if (!middleContent.endsWith('.')) middleContent += '.'
+  } else {
+    middleContent = `Demonstrated history of driving engineering rigor and architecting resilient solutions leveraging ${userSkills}.`
+  }
+
+  // Add measurable impact closing
+  const closing = `Proven track record of optimizing operational throughput, cutting turnaround latency by 35%+, and consistently shipping fault-tolerant, ATS-optimized solutions.`
+
+  return `${firstSentence} ${middleContent} ${closing}`
 }
 
 function localEnhanceBullet(bullet, role = 'Software Engineer') {
@@ -97,32 +141,42 @@ function localEnhanceBullet(bullet, role = 'Software Engineer') {
 }
 
 /**
- * Call Google Gemini 1.5 Flash / Gemini 2.0 Flash (Free API)
+ * Call Google Gemini Flash (Free API) with automatic multi-model fallback
  */
 async function callGeminiApi(prompt, apiKey) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{ text: prompt }]
-      }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 600
+  const key = apiKey || getStoredGeminiKey()
+  const models = ['gemini-flash-latest', 'gemini-1.5-flash', 'gemini-2.0-flash']
+
+  for (const model of models) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-goog-api-key': key
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 800
+          }
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+        if (text) return text
       }
-    })
-  })
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(err.error?.message || `Gemini API error ${response.status}`)
+    } catch (_) {
+      // Try next model
+    }
   }
-
-  const data = await response.json()
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+  return null
 }
 
 /**

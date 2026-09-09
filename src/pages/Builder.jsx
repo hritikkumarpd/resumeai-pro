@@ -4,7 +4,8 @@ import {
   Download, Eye, ChevronDown, ChevronUp, Plus, Trash2,
   Zap, Palette, Type, LayoutTemplate, Brain, Target, GripVertical,
   ZoomIn, ZoomOut, Maximize2, Columns, Edit3, CheckCircle2, Sparkles,
-  ArrowUp, ArrowDown, Camera, X, Settings2, Key, Check, Sun, Moon
+  ArrowUp, ArrowDown, Camera, X, Settings2, Key, Check, Sun, Moon,
+  Sliders, RotateCcw, RotateCw, SunDim, Contrast, Save, FileText, Edit2
 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
@@ -14,6 +15,8 @@ import {
   getStoredGeminiKey,
   setStoredGeminiKey
 } from '../lib/aiService'
+import { resumeApi } from '../lib/api'
+import { resumeStorage } from '../lib/resumeStorage'
 
 /* ── Default resume data (Hritik Kumar — TMSL Kolkata, CSE AI & ML) ── */
 const defaultData = {
@@ -160,16 +163,17 @@ function EditorSection({
   canMoveUp = false,
   canMoveDown = false,
   onMoveUp,
-  onMoveDown
+  onMoveDown,
+  isLight = false
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div style={{ borderBottom: '1px solid rgba(124,58,237,.15)' }}>
-      <div className="flex items-center justify-between px-4 py-3 hover:bg-white/[.02] transition-colors">
+      <div className={`flex items-center justify-between px-4 py-3 transition-colors ${isLight ? 'hover:bg-slate-50' : 'hover:bg-white/[.02]'}`}>
         <button className="flex items-center gap-2.5 text-left flex-1"
                 onClick={() => setOpen(v => !v)}>
           <Icon size={15} className="text-purple-400 flex-shrink-0" />
-          <span className="font-semibold text-xs md:text-sm text-slate-200">{title}</span>
+          <span className={`font-semibold text-xs md:text-sm ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{title}</span>
           {open ? <ChevronUp size={14} className="text-slate-500 ml-1" /> : <ChevronDown size={14} className="text-slate-500 ml-1" />}
         </button>
 
@@ -180,7 +184,7 @@ function EditorSection({
               onClick={(e) => { e.stopPropagation(); onMoveUp && onMoveUp() }}
               disabled={!canMoveUp}
               title="Move Section Up"
-              className={`p-1 rounded transition-colors ${canMoveUp ? 'text-slate-400 hover:text-white hover:bg-white/10' : 'text-slate-600 opacity-40 cursor-not-allowed'}`}
+              className={`p-1 rounded transition-colors ${canMoveUp ? (isLight ? 'text-slate-500 hover:text-slate-900 hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-white/10') : 'text-slate-600 opacity-40 cursor-not-allowed'}`}
             >
               <ArrowUp size={13} />
             </button>
@@ -188,7 +192,7 @@ function EditorSection({
               onClick={(e) => { e.stopPropagation(); onMoveDown && onMoveDown() }}
               disabled={!canMoveDown}
               title="Move Section Down"
-              className={`p-1 rounded transition-colors ${canMoveDown ? 'text-slate-400 hover:text-white hover:bg-white/10' : 'text-slate-600 opacity-40 cursor-not-allowed'}`}
+              className={`p-1 rounded transition-colors ${canMoveDown ? (isLight ? 'text-slate-500 hover:text-slate-900 hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-white/10') : 'text-slate-600 opacity-40 cursor-not-allowed'}`}
             >
               <ArrowDown size={13} />
             </button>
@@ -1070,11 +1074,12 @@ function ResumeDoc({
 export default function Builder() {
   const [searchParams] = useSearchParams()
   const templateFromUrl = searchParams.get('template')
+  const resumeIdFromUrl = searchParams.get('id')
 
   const { theme, toggleTheme, isDark } = useTheme()
   const isLight = theme === 'light'
 
-  const { user, profile, getUserDefaults } = useAuth()
+  const { user, profile, getUserDefaults, updateProfile } = useAuth()
   const [data, setData] = useState(defaultData)
   const [accent, setAccent] = useState('#000000')
   const [font, setFont] = useState('Times New Roman')
@@ -1085,20 +1090,58 @@ export default function Builder() {
   const [fontSizeScale, setFontSizeScale] = useState(1.0) // 0.8 to 1.25
   const [sectionOrder, setSectionOrder] = useState(DEFAULT_SECTION_ORDER)
   
-  // AI State & Modal (Google Gemini API — 100% Free)
-  const [isAiModalOpen, setIsAiModalOpen] = useState(false)
-  const [geminiApiKey, setGeminiApiKey] = useState(getStoredGeminiKey())
-  const [keySaved, setKeySaved] = useState(false)
+  // Resume Save & Load State
+  const [currentResumeId, setCurrentResumeId] = useState(resumeIdFromUrl || null)
+  const [resumeTitle, setResumeTitle] = useState('My Resume')
+  const [isSavingResume, setIsSavingResume] = useState(false)
+  const [saveResumeSuccess, setSaveResumeSuccess] = useState(false)
+  
+  // AI State & Custom Key Configuration
   const [isEnhancingSummary, setIsEnhancingSummary] = useState(false)
   const [enhancingExpId, setEnhancingExpId] = useState(null)
+  const [isAiConfigOpen, setIsAiConfigOpen] = useState(false)
+  const [aiApiKeyInput, setAiApiKeyInput] = useState(getStoredGeminiKey() || '')
+  const [aiKeySavedFeedback, setAiKeySavedFeedback] = useState(false)
+
+  // PDF Export State
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+
+  // Photo Adjustment & Account Saving State
+  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false)
+  const [tempPhoto, setTempPhoto] = useState('')
+  const [cropZoom, setCropZoom] = useState(1.0)
+  const [cropX, setCropX] = useState(0)
+  const [cropY, setCropY] = useState(0)
+  const [cropShape, setCropShape] = useState('circle') // 'circle' | 'square'
+  const [photoBrightness, setPhotoBrightness] = useState(100) // 50-150
+  const [photoContrast, setPhotoContrast] = useState(100) // 50-150
+  const [photoRotation, setPhotoRotation] = useState(0) // 0, 90, 180, 270
+  const [photoSavedToast, setPhotoSavedToast] = useState(false)
 
   const previewContainerRef = useRef(null)
   const fileInputRef = useRef(null)
 
-  // Auto-populate logged in user defaults into resume builder
+  // Auto-populate logged in user defaults & saved photo into resume builder
   useEffect(() => {
-    if (!user) return
     const defaults = getUserDefaults ? getUserDefaults() : {}
+    const savedPhoto = defaults.photo || localStorage.getItem('resumeai_user_photo') || ''
+
+    if (savedPhoto) {
+      setData(prev => {
+        if (!prev.personal.photo) {
+          return {
+            ...prev,
+            personal: {
+              ...prev.personal,
+              photo: savedPhoto
+            }
+          }
+        }
+        return prev
+      })
+    }
+
+    if (!user) return
     const userFullName = defaults.name || profile?.full_name || user?.user_metadata?.full_name || ''
     const userEmail = defaults.email || user?.email || ''
 
@@ -1116,6 +1159,7 @@ export default function Builder() {
             location: defaults.location || prev.personal.location,
             linkedin: defaults.linkedin || prev.personal.linkedin,
             website: defaults.website || prev.personal.website,
+            photo: prev.personal.photo || savedPhoto,
           },
           summary: defaults.summary || prev.summary,
           skills: (defaults.skills && typeof defaults.skills === 'string')
@@ -1133,6 +1177,65 @@ export default function Builder() {
       setTemplate(templateFromUrl)
     }
   }, [templateFromUrl])
+
+  // Handle loading resume from resumeStorage when ?id=... is present in URL
+  useEffect(() => {
+    if (!resumeIdFromUrl) return
+    let isMounted = true
+    const loadResume = async () => {
+      try {
+        const r = await resumeStorage.get(resumeIdFromUrl, user)
+        if (!isMounted || !r) return
+        if (r.title) setResumeTitle(r.title)
+        if (r.template && TEMPLATES.includes(r.template)) setTemplate(r.template)
+        if (r.accent_color) setAccent(r.accent_color)
+        if (r.font && FONTS.includes(r.font)) setFont(r.font)
+        if (r.data && typeof r.data === 'object' && Object.keys(r.data).length > 0) {
+          setData(prev => ({
+            ...prev,
+            ...r.data,
+            personal: {
+              ...prev.personal,
+              ...(r.data.personal || {})
+            }
+          }))
+        }
+        setCurrentResumeId(r.id)
+      } catch (err) {
+        console.error('Failed to load resume by ID:', err)
+      }
+    }
+    loadResume()
+    return () => { isMounted = false }
+  }, [resumeIdFromUrl, user])
+
+  // Save or update resume (stored persistently in user account storage + cloud sync)
+  const handleSaveResume = async () => {
+    setIsSavingResume(true)
+    try {
+      const currentScore = calcScore(data)
+      const payload = {
+        id: currentResumeId,
+        title: resumeTitle || (data.personal?.name ? `${data.personal.name}'s Resume` : 'My Resume'),
+        data,
+        template,
+        accent_color: accent,
+        font,
+        ats_score: currentScore
+      }
+      const saved = await resumeStorage.save(payload, user)
+      if (saved?.id) {
+        setCurrentResumeId(saved.id)
+      }
+      setSaveResumeSuccess(true)
+      setTimeout(() => setSaveResumeSuccess(false), 3000)
+    } catch (err) {
+      console.error('Failed to save resume:', err)
+      alert('Failed to save resume. Please try again.')
+    } finally {
+      setIsSavingResume(false)
+    }
+  }
 
   // Automatically adjust view mode on small screens (< 1024px)
   useEffect(() => {
@@ -1161,20 +1264,103 @@ export default function Builder() {
     }
   }
 
-  // Photo upload handler
+  // Save photo in user account & localStorage
+  const savePhotoToAccount = async (photoUrl) => {
+    try {
+      if (photoUrl) {
+        localStorage.setItem('resumeai_user_photo', photoUrl)
+      } else {
+        localStorage.removeItem('resumeai_user_photo')
+      }
+      if (updateProfile) {
+        await updateProfile({
+          photo: photoUrl,
+          avatar_url: photoUrl
+        })
+      }
+      setPhotoSavedToast(true)
+      setTimeout(() => setPhotoSavedToast(false), 2500)
+    } catch (err) {
+      console.warn('Could not save photo to account:', err)
+    }
+  }
+
+  // Photo upload handler: loads file and directly opens adjustment modal
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
     reader.onload = (event) => {
-      updPersonal('photo', event.target.result)
+      const raw = event.target.result
+      setTempPhoto(raw)
+      setCropZoom(1.0)
+      setCropX(0)
+      setCropY(0)
+      setPhotoBrightness(100)
+      setPhotoContrast(100)
+      setPhotoRotation(0)
+      setIsAdjustModalOpen(true)
     }
     reader.readAsDataURL(file)
   }
 
+  // Open adjust modal for current photo
+  const handleOpenAdjustModal = () => {
+    if (!data.personal.photo) return
+    setTempPhoto(data.personal.photo)
+    setCropZoom(1.0)
+    setCropX(0)
+    setCropY(0)
+    setPhotoBrightness(100)
+    setPhotoContrast(100)
+    setPhotoRotation(0)
+    setIsAdjustModalOpen(true)
+  }
+
+  // Remove photo
   const removePhoto = () => {
     updPersonal('photo', '')
+    savePhotoToAccount('')
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // Bake adjusted photo onto canvas and save
+  const handleApplyPhotoAdjustment = () => {
+    if (!tempPhoto) return
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 400
+      canvas.height = 400
+      const ctx = canvas.getContext('2d')
+      ctx.clearRect(0, 0, 400, 400)
+
+      const scale = Math.max(400 / img.width, 400 / img.height)
+      const w = img.width * scale
+      const h = img.height * scale
+
+      // Apply brightness and contrast
+      ctx.filter = `brightness(${photoBrightness}%) contrast(${photoContrast}%)`
+
+      ctx.save()
+      ctx.translate(200, 200)
+      // Apply rotation
+      ctx.rotate((photoRotation * Math.PI) / 180)
+      ctx.scale(cropZoom, cropZoom)
+      ctx.translate((cropX / 100) * 400, (cropY / 100) * 400)
+      ctx.drawImage(img, -w / 2, -h / 2, w, h)
+      ctx.restore()
+
+      // Reset filter
+      ctx.filter = 'none'
+
+      const baked = canvas.toDataURL('image/jpeg', 0.90)
+      updPersonal('photo', baked)
+      savePhotoToAccount(baked)
+      setIsAdjustModalOpen(false)
+    }
+    img.src = tempPhoto
   }
 
   // Move sections up/down
@@ -1197,8 +1383,7 @@ export default function Builder() {
       const enhanced = await enhanceSummaryWithAI({
         summary: data.summary,
         role: data.personal.title,
-        skills: data.skills,
-        customApiKey: geminiApiKey
+        skills: data.skills
       })
       if (enhanced) upd('summary', enhanced)
     } finally {
@@ -1215,8 +1400,7 @@ export default function Builder() {
       const enhanced = await enhanceBulletsWithAI({
         bullets: exp.bullets,
         role: exp.role,
-        company: exp.company,
-        customApiKey: geminiApiKey
+        company: exp.company
       })
       if (enhanced) updExp(expId, 'bullets', enhanced)
     } finally {
@@ -1224,48 +1408,28 @@ export default function Builder() {
     }
   }
 
-  // Save Gemini API Key
-  const handleSaveApiKey = () => {
-    setStoredGeminiKey(geminiApiKey)
-    setKeySaved(true)
-    setTimeout(() => setKeySaved(false), 2000)
-  }
-
-  /* ── Bulletproof Print & Save as PDF Functionality ── */
-  const handlePrint = () => {
+  /* ── Direct Vector PDF Export with 100% Selectable Text & Active Hyperlinks ── */
+  const handlePrint = async () => {
     const resumeElem = document.getElementById('printable-resume')
     if (!resumeElem) {
       window.print()
       return
     }
 
-    // Extract all compiled CSS from current page (Tailwind is compiled by Vite at build-time)
-    const extractedCSS = extractPageCSS()
+    setIsGeneratingPdf(true)
 
-    let iframe = document.getElementById('print-resume-iframe')
-    if (!iframe) {
-      iframe = document.createElement('iframe')
-      iframe.id = 'print-resume-iframe'
-      iframe.style.position = 'fixed'
-      iframe.style.left = '-9999px'
-      iframe.style.top = '0'
-      iframe.style.width = '210mm'
-      iframe.style.height = '297mm'
-      iframe.style.border = '0'
-      iframe.style.zIndex = '-9999'
-      document.body.appendChild(iframe)
-    }
+    try {
+      // Extract all compiled CSS from current page
+      const extractedCSS = extractPageCSS()
 
-    // Build Google Fonts URL
-    const fontFamilies = [font, 'Inter', 'Roboto', 'Times New Roman'].filter(Boolean)
-    const googleFonts = fontFamilies
-      .filter(f => !['Times New Roman', 'Georgia', 'Arial', 'Helvetica', 'serif', 'sans-serif'].includes(f))
-      .map(f => `family=${encodeURIComponent(f)}:wght@400;500;600;700`)
-      .join('&')
+      // Build Google Fonts URL
+      const fontFamilies = [font, 'Inter', 'Roboto', 'Times New Roman'].filter(Boolean)
+      const googleFonts = fontFamilies
+        .filter(f => !['Times New Roman', 'Georgia', 'Arial', 'Helvetica', 'serif', 'sans-serif'].includes(f))
+        .map(f => `family=${encodeURIComponent(f)}:wght@400;500;600;700`)
+        .join('&')
 
-    const doc = iframe.contentWindow.document
-    doc.open()
-    doc.write(`<!DOCTYPE html>
+      const fullHtml = `<!DOCTYPE html>
 <html>
 <head>
   <title>${(data.personal.name || 'Resume') + ' - ATS Resume'}</title>
@@ -1274,7 +1438,6 @@ export default function Builder() {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?${googleFonts}&display=swap" rel="stylesheet">` : ''}
   <style>
-    /* Injected compiled CSS from app (includes Tailwind utilities) */
     ${extractedCSS}
   </style>
   <style>
@@ -1312,7 +1475,11 @@ export default function Builder() {
       background: #ffffff !important;
       transform: none !important;
       box-sizing: border-box !important;
-      /* Notice: exact 16mm 18mm padding and font sizes are preserved 100% identically */
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+      cursor: pointer;
     }
     img { max-width: 100%; height: auto; }
     h1, h2, h3, h4 { page-break-after: avoid; }
@@ -1324,21 +1491,77 @@ export default function Builder() {
     ${resumeElem.outerHTML}
   </div>
 </body>
-</html>`)
-    doc.close()
+</html>`
 
-    // Wait for fonts + styles to settle, then print
-    const triggerPrint = () => {
-      iframe.contentWindow.focus()
-      iframe.contentWindow.print()
-    }
+      // 1. Try Direct Vector PDF via Backend Puppeteer (100% Selectable Text & Active Links)
+      try {
+        const response = await fetch('/api/pdf/render-html', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            html: fullHtml,
+            name: data.personal.name || 'Resume'
+          })
+        })
 
-    if (iframe.contentDocument?.fonts?.ready) {
-      iframe.contentDocument.fonts.ready.then(() => {
-        setTimeout(triggerPrint, 350)
-      }).catch(() => setTimeout(triggerPrint, 1000))
-    } else {
-      setTimeout(triggerPrint, 1000)
+        if (response.ok) {
+          const blob = await response.blob()
+          const url = window.URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          const safeName = (data.personal.name || 'Resume').replace(/[^a-zA-Z0-9_-]/g, '_')
+          a.href = url
+          a.download = `${safeName}_ATS_Resume.pdf`
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          window.URL.revokeObjectURL(url)
+          setIsGeneratingPdf(false)
+          return
+        }
+      } catch (apiErr) {
+        console.warn('Backend vector PDF download error, falling back to browser print:', apiErr)
+      }
+
+      // 2. Fallback: In-Viewport Vector Browser Print
+      // Inset at (0, 0) inside viewport so Chromium preserves vector fonts and PDF /Link annotations
+      let iframe = document.getElementById('print-resume-iframe')
+      if (!iframe) {
+        iframe = document.createElement('iframe')
+        iframe.id = 'print-resume-iframe'
+        iframe.style.position = 'fixed'
+        iframe.style.left = '0'
+        iframe.style.top = '0'
+        iframe.style.width = '210mm'
+        iframe.style.height = '297mm'
+        iframe.style.border = '0'
+        iframe.style.opacity = '0.001'
+        iframe.style.pointerEvents = 'none'
+        iframe.style.zIndex = '-9999'
+        document.body.appendChild(iframe)
+      }
+
+      const doc = iframe.contentWindow.document
+      doc.open()
+      doc.write(fullHtml)
+      doc.close()
+
+      const triggerPrint = () => {
+        setIsGeneratingPdf(false)
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+      }
+
+      if (iframe.contentDocument?.fonts?.ready) {
+        iframe.contentDocument.fonts.ready.then(() => {
+          setTimeout(triggerPrint, 350)
+        }).catch(() => setTimeout(triggerPrint, 800))
+      } else {
+        setTimeout(triggerPrint, 800)
+      }
+    } catch (err) {
+      console.error('PDF generation error:', err)
+      setIsGeneratingPdf(false)
+      window.print()
     }
   }
 
@@ -1382,30 +1605,74 @@ export default function Builder() {
       <header className="px-4 py-2 border-b flex flex-wrap items-center justify-between gap-2.5 z-20 flex-shrink-0 transition-colors"
               style={{ background: isLight ? '#ffffff' : '#0c0e29', borderColor: isLight ? '#e2e8f0' : 'rgba(124,58,237,.2)' }}>
         
-        {/* Left: Template & Font Selector */}
+        {/* Left: Resume Title / Name & Template / Font Selector */}
         <div className="flex items-center gap-2 flex-nowrap">
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-500 dark:text-emerald-400 font-semibold px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 flex-shrink-0">
-            <CheckCircle2 size={12} />
-            <span>Format:</span>
+          {/* Resume Name / Title input (e.g. Data Science Resume, AIML Resume) */}
+          <div
+            className={`flex items-center gap-1.5 border rounded-lg px-2.5 py-1 shadow-sm transition-all ${
+              isLight
+                ? 'bg-white border-purple-200 focus-within:border-purple-600 focus-within:ring-2 focus-within:ring-purple-500/20'
+                : 'bg-[#141842] border-purple-500/30 focus-within:border-purple-400 focus-within:ring-2 focus-within:ring-purple-500/30'
+            }`}
+            title="Rename your resume (e.g., Data Science Resume, AIML Resume)"
+          >
+            <FileText size={13} className={`flex-shrink-0 ${isLight ? 'text-purple-600' : 'text-purple-400'}`} />
+            <input
+              type="text"
+              value={resumeTitle}
+              onChange={e => setResumeTitle(e.target.value)}
+              placeholder="e.g. Data Science Resume"
+              aria-label="Resume Name"
+              className={`text-xs font-bold bg-transparent outline-none border-none py-0.5 w-[140px] sm:w-[170px] md:w-[195px] truncate ${
+                isLight ? 'text-slate-900 placeholder:text-slate-400' : 'text-white placeholder:text-slate-500'
+              }`}
+            />
+            <Edit2 size={11} className={`${isLight ? 'text-slate-400' : 'text-slate-500'} pointer-events-none opacity-60 flex-shrink-0`} />
           </div>
-          <select value={template} onChange={e => setTemplate(e.target.value)}
-                  aria-label="Select Resume Template"
-                  className={`form-input text-xs py-1.5 px-2 font-medium rounded-lg w-auto max-w-[210px] md:max-w-[240px] truncate ${
-                    isLight
-                      ? 'bg-slate-100 border-slate-300 text-slate-800'
-                      : 'bg-[#141842] border-purple-500/30 text-slate-100'
-                  }`}>
-            {TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select value={font} onChange={e => setFont(e.target.value)}
-                  aria-label="Select Font"
-                  className={`form-input text-xs py-1.5 px-2 rounded-lg w-auto min-w-[95px] ${
-                    isLight
-                      ? 'bg-slate-100 border-slate-300 text-slate-800'
-                      : 'bg-[#141842] border-purple-500/30 text-slate-200'
-                  }`}>
-            {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
+
+          {/* Template Dropdown with Icon */}
+          <div className={`flex items-center gap-1.5 border rounded-lg shadow-sm transition-colors ${
+            isLight ? 'bg-white border-slate-300' : 'bg-[#141842] border-purple-500/30'
+          }`}>
+            <LayoutTemplate size={13} className={`ml-2.5 flex-shrink-0 ${
+              isLight ? 'text-slate-500' : 'text-purple-400'
+            }`} />
+            <select value={template} onChange={e => setTemplate(e.target.value)}
+                    aria-label="Select Resume Template"
+                    style={{
+                      backgroundColor: 'transparent',
+                      color: isLight ? '#0f172a' : '#f8fafc',
+                    }}
+                    className="text-xs py-1.5 pr-2.5 pl-0.5 font-semibold w-auto max-w-[260px] md:max-w-[300px] truncate cursor-pointer outline-none border-none focus:ring-0 appearance-none bg-transparent">
+              {TEMPLATES.map(t => (
+                <option key={t} value={t} style={{ backgroundColor: isLight ? '#ffffff' : '#141842', color: isLight ? '#0f172a' : '#f8fafc', fontWeight: 500 }}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Font Dropdown with Icon */}
+          <div className={`flex items-center gap-1.5 border rounded-lg shadow-sm transition-colors ${
+            isLight ? 'bg-white border-slate-300' : 'bg-[#141842] border-purple-500/30'
+          }`}>
+            <Type size={13} className={`ml-2.5 flex-shrink-0 ${
+              isLight ? 'text-slate-500' : 'text-cyan-400'
+            }`} />
+            <select value={font} onChange={e => setFont(e.target.value)}
+                    aria-label="Select Font"
+                    style={{
+                      backgroundColor: 'transparent',
+                      color: isLight ? '#0f172a' : '#f8fafc',
+                    }}
+                    className="text-xs py-1.5 pr-2.5 pl-0.5 font-semibold w-auto min-w-[100px] cursor-pointer outline-none border-none focus:ring-0 appearance-none bg-transparent">
+              {FONTS.map(f => (
+                <option key={f} value={f} style={{ backgroundColor: isLight ? '#ffffff' : '#141842', color: isLight ? '#0f172a' : '#f8fafc', fontWeight: 500 }}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Font Size Scaling Controls (A- / A+) */}
           <div className={`flex items-center gap-1 border rounded-lg px-2 py-1 transition-colors ${
@@ -1467,7 +1734,7 @@ export default function Builder() {
           </button>
         </div>
 
-        {/* Right: AI Settings, Theme toggle, Zoom controls & Print PDF Button */}
+        {/* Right: AI Active Badge, Theme toggle, Zoom controls & Print PDF Button */}
         <div className="flex items-center gap-2">
           {/* Theme Toggle Button */}
           <button onClick={toggleTheme}
@@ -1481,14 +1748,17 @@ export default function Builder() {
             <span className="hidden sm:inline">{isDark ? 'Light' : 'Dark'}</span>
           </button>
 
-          {/* AI Settings Key Button */}
-          <button onClick={() => setIsAiModalOpen(true)}
-                  title="Inbuilt Unlimited Free Gemini AI Model Active"
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-medium text-emerald-300 hover:text-white bg-emerald-500/15 border border-emerald-500/30 transition-all shadow-sm">
+          {/* AI Active Badge (Configurable) */}
+          <div
+            onClick={() => setIsAiConfigOpen(true)}
+            title="AI Resume Intelligence Active (Click to configure API Key)"
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 cursor-pointer shadow-sm hover:bg-emerald-500/25 transition-colors"
+          >
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <Sparkles size={12} className="text-emerald-400" />
-            <span className="hidden sm:inline font-semibold">Gemini AI Active</span>
-          </button>
+            <span className="hidden sm:inline font-semibold">AI Active</span>
+            <Settings2 size={11} className="text-emerald-400/70 hover:text-emerald-300 ml-0.5" />
+          </div>
 
           {/* Zoom controls */}
           <div className={`flex items-center gap-1 border rounded-lg px-2 py-1 transition-colors ${
@@ -1515,11 +1785,47 @@ export default function Builder() {
             </button>
           </div>
 
+          {/* Save to Account button (Always accessible) */}
+          <button
+            onClick={handleSaveResume}
+            disabled={isSavingResume}
+            className={`flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+              saveResumeSuccess
+                ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/40'
+                : isLight
+                  ? 'bg-white hover:bg-slate-50 text-purple-700 border border-purple-200 shadow-sm'
+                  : 'bg-[#141740] hover:bg-purple-600/20 text-purple-300 border border-purple-500/30'
+            }`}
+            title="Save resume to My Resumes & Dashboard"
+          >
+            {saveResumeSuccess ? (
+              <>
+                <Check size={13} className="text-emerald-400" />
+                <span>Saved!</span>
+              </>
+            ) : (
+              <>
+                <Save size={13} />
+                <span>{isSavingResume ? 'Saving...' : 'Save'}</span>
+              </>
+            )}
+          </button>
+
           {/* Download PDF button */}
           <button onClick={handlePrint}
-                  className="btn-primary text-xs px-3.5 py-1.5 rounded-lg gap-1.5 shadow-lg shadow-purple-600/20 font-semibold">
-            <Download size={13} />
-            <span>Download PDF</span>
+                  disabled={isGeneratingPdf}
+                  className="btn-primary text-xs px-3.5 py-1.5 rounded-lg gap-1.5 shadow-lg shadow-purple-600/20 font-semibold cursor-pointer disabled:opacity-75">
+            {isGeneratingPdf ? (
+              <>
+                <Sparkles size={13} className="animate-spin text-purple-200" />
+                <span>Exporting Vector PDF...</span>
+              </>
+            ) : (
+              <>
+                <Download size={13} />
+                <span>Download PDF</span>
+              </>
+            )}
           </button>
         </div>
       </header>
@@ -1542,14 +1848,14 @@ export default function Builder() {
                    borderColor: isLight ? '#e2e8f0' : 'rgba(124,58,237,.15)'
                  }}>
               <div className="flex items-center gap-2">
-                <Palette size={13} className="text-slate-400" />
-                <span className="text-xs text-slate-300">Ink Tone:</span>
+                <Palette size={13} className={isLight ? 'text-slate-500' : 'text-slate-400'} />
+                <span className={`text-xs ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Ink Tone:</span>
                 <div className="flex items-center gap-1.5 ml-1">
                   {ACCENT_COLORS.map(c => (
                     <button key={c} onClick={() => setAccent(c)}
                             title={c === '#000000' ? '100% Pure Black (Standard ATS)' : c}
-                            className="w-4 h-4 rounded-full transition-transform hover:scale-125 border border-white/30"
-                            style={{ background: c, boxShadow: accent === c ? '0 0 0 2px #fff, 0 0 0 3px #10B981' : 'none' }} />
+                            className={`w-4 h-4 rounded-full transition-transform hover:scale-125 border ${isLight ? 'border-slate-300' : 'border-white/30'}`}
+                            style={{ background: c, boxShadow: accent === c ? `0 0 0 2px ${isLight ? '#fff' : '#fff'}, 0 0 0 3px #10B981` : 'none' }} />
                   ))}
                   <span className="text-[10px] text-emerald-400 font-semibold ml-1">
                     {accent === '#000000' ? 'Pure B&W' : 'Slate'}
@@ -1577,29 +1883,87 @@ export default function Builder() {
                 </div>
                 <div className="px-4 py-3 flex flex-col gap-2.5">
                   {/* Photo upload row */}
-                  <div className="flex items-center gap-3 p-2.5 rounded-xl bg-purple-500/5 border border-purple-500/15">
-                    {data.personal.photo ? (
-                      <div className="relative">
-                        <img src={data.personal.photo} alt="Headshot" className="w-12 h-12 rounded-full object-cover border border-purple-400" />
-                        <button onClick={removePhoto} title="Remove Photo"
-                                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition-colors">
-                          <X size={10} />
-                        </button>
+                  <div className="p-2.5 rounded-xl bg-purple-500/5 border border-purple-500/15 space-y-2">
+                    <div className="flex items-center gap-3">
+                      {data.personal.photo ? (
+                        <div className="relative group flex-shrink-0">
+                          <img src={data.personal.photo} alt="Headshot" className="w-12 h-12 rounded-full object-cover border-2 border-purple-400 shadow-md" />
+                          <button onClick={removePhoto} title="Remove Photo"
+                                  className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-0.5 shadow transition-colors">
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-[#181a42] border border-dashed border-purple-400/50 flex items-center justify-center text-purple-300 flex-shrink-0 shadow-inner">
+                          <Camera size={18} />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-semibold text-slate-200">Profile Photo</span>
+                          {data.personal.photo && (
+                            <span className="text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded font-medium inline-flex items-center gap-0.5">
+                              <Check size={9} /> Saved in Account
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate">Professional headshot for photo templates</div>
                       </div>
-                    ) : (
-                      <div className="w-12 h-12 rounded-full bg-[#181a42] border border-dashed border-purple-400/50 flex items-center justify-center text-purple-300">
-                        <Camera size={18} />
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {data.personal.photo && (
+                          <button
+                            type="button"
+                            onClick={handleOpenAdjustModal}
+                            className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-indigo-600/30 text-indigo-200 hover:bg-indigo-600/50 border border-indigo-500/30 transition-all inline-flex items-center gap-1 cursor-pointer"
+                            title="Crop and reposition photo"
+                          >
+                            <Sliders size={11} />
+                            <span>Adjust</span>
+                          </button>
+                        )}
+                        <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" id="photo-upload" />
+                        <label htmlFor="photo-upload" className="cursor-pointer text-xs font-medium px-2.5 py-1.5 rounded-lg bg-purple-600/30 text-purple-200 hover:bg-purple-600/50 border border-purple-500/30 transition-all inline-flex items-center gap-1">
+                          <Camera size={11} />
+                          <span>{data.personal.photo ? 'Change' : 'Upload'}</span>
+                        </label>
+                      </div>
+                    </div>
+                    {photoSavedToast && (
+                      <div className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded flex items-center gap-1 animate-fade-in">
+                        <Check size={10} />
+                        <span>Photo automatically saved to your account!</span>
                       </div>
                     )}
-                    <div className="flex-1">
-                      <div className="text-xs font-semibold text-slate-200">Profile Photo (Optional)</div>
-                      <div className="text-[10px] text-slate-400">Add a professional headshot for photo templates</div>
-                    </div>
-                    <div>
-                      <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" id="photo-upload" />
-                      <label htmlFor="photo-upload" className="cursor-pointer text-xs font-medium px-2.5 py-1.5 rounded-lg bg-purple-600/30 text-purple-200 hover:bg-purple-600/50 border border-purple-500/30 transition-all inline-block">
-                        {data.personal.photo ? 'Change' : 'Upload'}
+                  </div>
+
+                  {/* Resume Name / Target Role Customizer */}
+                  <div className={`p-3 rounded-xl border mb-1 transition-colors ${
+                    isLight ? 'bg-purple-50/60 border-purple-200' : 'bg-purple-500/10 border-purple-500/25'
+                  }`}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-purple-400 flex items-center gap-1.5">
+                        <FileText size={13} /> Resume Name / Role
                       </label>
+                      <span className="text-[10px] text-slate-400">Dashboard Title</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={resumeTitle}
+                      onChange={e => setResumeTitle(e.target.value)}
+                      placeholder="e.g. Data Science Resume, AIML Resume..."
+                      className="form-input text-xs w-full font-semibold"
+                    />
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {['Data Science Resume', 'AIML Resume', 'Full Stack Developer', 'Software Engineer'].map(tag => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setResumeTitle(tag)}
+                          className="text-[10px] px-2 py-0.5 rounded-md bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 hover:text-white border border-purple-500/30 transition-colors cursor-pointer"
+                        >
+                          + {tag}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
@@ -1635,6 +1999,7 @@ export default function Builder() {
                       canMoveDown={canMoveDown}
                       onMoveUp={() => moveSection('summary', -1)}
                       onMoveDown={() => moveSection('summary', 1)}
+                      isLight={isLight}
                     >
                       <Field value={data.summary} onChange={v => upd('summary', v)}
                              placeholder="Write a concise 2-3 sentence summary..." multiline />
@@ -1647,7 +2012,7 @@ export default function Builder() {
                           <Sparkles size={12} className={isEnhancingSummary ? 'animate-spin' : ''} />
                           <span>{isEnhancingSummary ? 'AI Enhancing Summary...' : 'Auto-Enhance with AI'}</span>
                         </button>
-                        <span className="text-[10px] text-emerald-400 font-medium">Gemini 1.5 Flash (100% Free)</span>
+                        <span className="text-[10px] text-emerald-400 font-medium">● AI Engine Ready</span>
                       </div>
                     </EditorSection>
                   )
@@ -1664,6 +2029,7 @@ export default function Builder() {
                       canMoveDown={canMoveDown}
                       onMoveUp={() => moveSection('experience', -1)}
                       onMoveDown={() => moveSection('experience', 1)}
+                      isLight={isLight}
                     >
                       <div className="flex flex-col gap-3.5">
                         {data.experience.map((exp, idx) => (
@@ -1723,6 +2089,7 @@ export default function Builder() {
                       canMoveDown={canMoveDown}
                       onMoveUp={() => moveSection('education', -1)}
                       onMoveDown={() => moveSection('education', 1)}
+                      isLight={isLight}
                     >
                       {data.education.map(edu => (
                         <div key={edu.id} className="rounded-xl p-3 flex flex-col gap-2 mb-3"
@@ -1759,6 +2126,7 @@ export default function Builder() {
                       canMoveDown={canMoveDown}
                       onMoveUp={() => moveSection('skills', -1)}
                       onMoveDown={() => moveSection('skills', 1)}
+                      isLight={isLight}
                     >
                       <div className="flex flex-wrap gap-1.5 mb-3">
                         {data.skills.map(sk => (
@@ -1793,6 +2161,7 @@ export default function Builder() {
                       canMoveDown={canMoveDown}
                       onMoveUp={() => moveSection('projects', -1)}
                       onMoveDown={() => moveSection('projects', 1)}
+                      isLight={isLight}
                     >
                       {data.projects.map(p => (
                         <div key={p.id} className="rounded-xl p-3 flex flex-col gap-2 mb-3"
@@ -1826,6 +2195,7 @@ export default function Builder() {
                       canMoveDown={canMoveDown}
                       onMoveUp={() => moveSection('certifications', -1)}
                       onMoveDown={() => moveSection('certifications', 1)}
+                      isLight={isLight}
                     >
                       {data.certifications.map(c => (
                         <div key={c.id} className="rounded-xl p-3 flex flex-col gap-2 mb-3"
@@ -1913,75 +2283,368 @@ export default function Builder() {
 
       </div>
 
-      {/* ── Google Gemini AI Settings Modal (100% Free) ── */}
-      {isAiModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+      {/* ── Interactive Photo Adjuster & Crop Modal ── */}
+      {isAdjustModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
           <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border"
-               style={{ background: '#0e1136', borderColor: 'rgba(16,185,129,.3)' }}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-emerald-300 font-bold text-base">
-                <Sparkles size={18} className="text-emerald-400" />
-                <span>Google Gemini AI (Inbuilt Unlimited Free)</span>
+               style={{ background: isLight ? '#ffffff' : '#0e1136', borderColor: isLight ? '#cbd5e1' : 'rgba(124,58,237,.35)' }}>
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b"
+                 style={{ borderColor: isLight ? '#e2e8f0' : 'rgba(255,255,255,.1)' }}>
+              <div className="flex items-center gap-2">
+                <Sliders size={18} className="text-purple-400" />
+                <h3 className="font-bold text-base" style={{ color: isLight ? '#0f172a' : '#f8fafc' }}>
+                  Adjust & Reposition Photo
+                </h3>
               </div>
-              <button onClick={() => setIsAiModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-lg">
-                <X size={16} />
+              <button onClick={() => setIsAdjustModalOpen(false)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer">
+                <X size={18} />
               </button>
             </div>
 
-            {/* Inbuilt Active Status Card */}
-            <div className="p-3.5 mb-4 rounded-xl text-xs bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 flex items-start gap-3 shadow-inner">
-              <CheckCircle2 size={20} className="text-emerald-400 flex-shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <div className="font-semibold text-emerald-200 text-xs flex items-center gap-1.5">
-                  Inbuilt Unlimited Free Gemini Model Active
+            {/* Live Interactive Preview Box */}
+            <div className="py-4 flex flex-col items-center">
+              <div className="relative w-52 h-52 rounded-2xl flex items-center justify-center overflow-hidden border shadow-inner"
+                   style={{
+                     background: isLight ? '#f1f5f9' : '#070818',
+                     borderColor: isLight ? '#cbd5e1' : 'rgba(124,58,237,.25)'
+                   }}>
+                {/* Visual guideline overlay crosshair */}
+                <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 opacity-20 border border-purple-400/30">
+                  <div className="border-r border-b border-purple-400/40"></div>
+                  <div className="border-r border-b border-purple-400/40"></div>
+                  <div className="border-b border-purple-400/40"></div>
+                  <div className="border-r border-b border-purple-400/40"></div>
+                  <div className="border-r border-b border-purple-400/40"></div>
+                  <div className="border-b border-purple-400/40"></div>
+                  <div className="border-r border-purple-400/40"></div>
+                  <div className="border-r border-purple-400/40"></div>
+                  <div></div>
                 </div>
-                <p className="text-[11px] text-emerald-300/90 leading-relaxed">
-                  Every AI feature in ResumeAI Pro works 100% free with <b>zero API key setup</b>. You can click <b>"Auto-Enhance with AI"</b> on your summary or <b>"AI Enhance Bullets"</b> across any job experience at any time without hitting limits!
-                </p>
-              </div>
-            </div>
 
-            <div className="flex flex-col gap-2 mb-4">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                  <Key size={13} className="text-purple-400" />
-                  <span>Personal Google AI Studio Key (Optional Override)</span>
-                </label>
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[11px] text-cyan-400 hover:text-cyan-300 underline font-medium"
+                {/* Mask Frame (Circle or Square) */}
+                <div className={`w-40 h-40 overflow-hidden border-2 shadow-2xl relative transition-all duration-200 ${
+                  cropShape === 'circle' ? 'rounded-full border-purple-500' : 'rounded-2xl border-purple-500'
+                }`}>
+                  {tempPhoto ? (
+                    <img
+                      src={tempPhoto}
+                      alt="Adjust Preview"
+                      className="w-full h-full object-cover select-none pointer-events-none"
+                      style={{
+                        transform: `rotate(${photoRotation}deg) scale(${cropZoom}) translate(${cropX}%, ${cropY}%)`,
+                        transformOrigin: 'center center',
+                        filter: `brightness(${photoBrightness}%) contrast(${photoContrast}%)`,
+                        transition: 'none'
+                      }}
+                    />
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Shape Switcher (Circle vs Square) */}
+              <div className="flex items-center gap-2 mt-3 text-xs">
+                <span className="text-slate-400 text-[11px]">Preview Frame:</span>
+                <button
+                  type="button"
+                  onClick={() => setCropShape('circle')}
+                  className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                    cropShape === 'circle'
+                      ? 'bg-purple-600 text-white shadow'
+                      : isLight ? 'bg-slate-200 text-slate-700' : 'bg-white/10 text-slate-300'
+                  }`}
                 >
-                  Get Personal Key ↗
-                </a>
+                  Circle (Standard)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCropShape('square')}
+                  className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                    cropShape === 'square'
+                      ? 'bg-purple-600 text-white shadow'
+                      : isLight ? 'bg-slate-200 text-slate-700' : 'bg-white/10 text-slate-300'
+                  }`}
+                >
+                  Square (Modern)
+                </button>
               </div>
-              <input
-                type="password"
-                value={geminiApiKey}
-                onChange={e => setGeminiApiKey(e.target.value)}
-                placeholder="Leave blank to use Inbuilt Unlimited Free Model..."
-                className="form-input text-xs py-2 px-3 bg-[#151845] border-purple-500/30 text-slate-100 rounded-lg w-full font-mono focus:border-emerald-400"
-              />
-              <span className="text-[10px] text-slate-400">
-                Optional: Leave blank for standard inbuilt engine, or enter your own custom Google Gemini key if desired.
-              </span>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-white/10">
-              <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-                {keySaved ? <><Check size={13} /> Saved successfully!</> : (geminiApiKey ? <span className="text-slate-300 text-[11px]">Custom key active</span> : <span className="text-emerald-400 text-[11px] font-medium flex items-center gap-1">● Inbuilt Free AI Active</span>)}
-              </span>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setIsAiModalOpen(false)}
-                        className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white">
-                  Close
-                </button>
-                <button onClick={handleSaveApiKey}
-                        className="btn-primary text-xs px-4 py-1.5 rounded-lg font-semibold shadow-md bg-emerald-600 hover:bg-emerald-500 border-emerald-500">
-                  Save
+            {/* Slider Controls */}
+            <div className="space-y-3 pt-1 pb-4">
+              {/* Zoom Slider */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium flex items-center gap-1.5" style={{ color: isLight ? '#334155' : '#cbd5e1' }}>
+                    <ZoomIn size={13} className="text-purple-400" />
+                    <span>Zoom / Scale</span>
+                  </span>
+                  <span className="font-mono text-[11px] font-semibold text-purple-400">
+                    {Math.round(cropZoom * 100)}%
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCropZoom(z => Math.max(1.0, +(z - 0.1).toFixed(2)))}
+                    className={`px-2 py-0.5 rounded text-xs font-bold cursor-pointer ${
+                      isLight ? 'bg-slate-200 hover:bg-slate-300 text-slate-700' : 'bg-white/10 hover:bg-white/20 text-slate-200'
+                    }`}
+                  >
+                    -
+                  </button>
+                  <input
+                    type="range"
+                    min="1.0"
+                    max="2.5"
+                    step="0.05"
+                    value={cropZoom}
+                    onChange={e => setCropZoom(parseFloat(e.target.value))}
+                    className="flex-1 accent-purple-600 cursor-pointer h-1.5 rounded-lg bg-slate-700"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCropZoom(z => Math.min(2.5, +(z + 0.1).toFixed(2)))}
+                    className={`px-2 py-0.5 rounded text-xs font-bold cursor-pointer ${
+                      isLight ? 'bg-slate-200 hover:bg-slate-300 text-slate-700' : 'bg-white/10 hover:bg-white/20 text-slate-200'
+                    }`}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Vertical Position (Y) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium flex items-center gap-1.5" style={{ color: isLight ? '#334155' : '#cbd5e1' }}>
+                    <ArrowUp size={13} className="text-cyan-400" />
+                    <span>Vertical Position (Up / Down)</span>
+                  </span>
+                  <span className="font-mono text-[11px] font-semibold text-cyan-400">
+                    {cropY > 0 ? `+${cropY}%` : `${cropY}%`}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="-50"
+                  max="50"
+                  step="1"
+                  value={cropY}
+                  onChange={e => setCropY(parseInt(e.target.value))}
+                  className="w-full accent-cyan-500 cursor-pointer h-1.5 rounded-lg bg-slate-700"
+                />
+              </div>
+
+              {/* Horizontal Position (X) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium flex items-center gap-1.5" style={{ color: isLight ? '#334155' : '#cbd5e1' }}>
+                    <ArrowDown size={13} className="text-emerald-400 rotate-90" />
+                    <span>Horizontal Position (Left / Right)</span>
+                  </span>
+                  <span className="font-mono text-[11px] font-semibold text-emerald-400">
+                    {cropX > 0 ? `+${cropX}%` : `${cropX}%`}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="-50"
+                  max="50"
+                  step="1"
+                  value={cropX}
+                  onChange={e => setCropX(parseInt(e.target.value))}
+                  className="w-full accent-emerald-500 cursor-pointer h-1.5 rounded-lg bg-slate-700"
+                />
+              </div>
+
+              {/* Brightness Slider */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium flex items-center gap-1.5" style={{ color: isLight ? '#334155' : '#cbd5e1' }}>
+                    <SunDim size={13} className="text-amber-400" />
+                    <span>Brightness</span>
+                  </span>
+                  <span className="font-mono text-[11px] font-semibold text-amber-400">
+                    {photoBrightness}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="50"
+                  max="150"
+                  step="2"
+                  value={photoBrightness}
+                  onChange={e => setPhotoBrightness(parseInt(e.target.value))}
+                  className="w-full accent-amber-400 cursor-pointer h-1.5 rounded-lg bg-slate-700"
+                />
+              </div>
+
+              {/* Contrast Slider */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium flex items-center gap-1.5" style={{ color: isLight ? '#334155' : '#cbd5e1' }}>
+                    <Contrast size={13} className="text-indigo-400" />
+                    <span>Contrast</span>
+                  </span>
+                  <span className="font-mono text-[11px] font-semibold text-indigo-400">
+                    {photoContrast}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="50"
+                  max="150"
+                  step="2"
+                  value={photoContrast}
+                  onChange={e => setPhotoContrast(parseInt(e.target.value))}
+                  className="w-full accent-indigo-400 cursor-pointer h-1.5 rounded-lg bg-slate-700"
+                />
+              </div>
+
+              {/* Rotation & Reset Row */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium flex items-center gap-1" style={{ color: isLight ? '#334155' : '#cbd5e1' }}>
+                    <RotateCw size={13} className="text-pink-400" />
+                    <span>Rotate:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPhotoRotation(r => (r + 90) % 360)}
+                    className={`px-2 py-0.5 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 ${
+                      isLight ? 'bg-slate-200 hover:bg-slate-300 text-slate-700' : 'bg-white/10 hover:bg-white/20 text-slate-200'
+                    }`}
+                  >
+                    <span>+90° ({photoRotation}°)</span>
+                  </button>
+                </div>
+
+                {/* Reset All Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCropZoom(1.0);
+                    setCropX(0);
+                    setCropY(0);
+                    setPhotoBrightness(100);
+                    setPhotoContrast(100);
+                    setPhotoRotation(0);
+                  }}
+                  className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                >
+                  <RotateCcw size={11} />
+                  <span>Reset All</span>
                 </button>
               </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-3 border-t"
+                 style={{ borderColor: isLight ? '#e2e8f0' : 'rgba(255,255,255,.1)' }}>
+              <button
+                type="button"
+                onClick={() => setIsAdjustModalOpen(false)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyPhotoAdjustment}
+                className="btn-primary text-xs px-4 py-2 rounded-xl font-semibold shadow-md flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check size={14} />
+                <span>Save & Apply to Account</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── AI Engine Configuration Modal ── */}
+      {isAiConfigOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border"
+               style={{ background: isLight ? '#ffffff' : '#0e1136', borderColor: isLight ? '#cbd5e1' : 'rgba(124,58,237,.35)' }}>
+            
+            <div className="flex items-center justify-between pb-3 border-b"
+                 style={{ borderColor: isLight ? '#e2e8f0' : 'rgba(255,255,255,.1)' }}>
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} className="text-purple-400" />
+                <h3 className="font-bold text-base" style={{ color: isLight ? '#0f172a' : '#f8fafc' }}>
+                  AI Engine Settings
+                </h3>
+              </div>
+              <button onClick={() => setIsAiConfigOpen(false)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-3">
+              <p className="text-xs text-slate-400 leading-relaxed">
+                ResumeAI Pro includes an intelligent dynamic resume engine. For unlimited real-time completions powered by Google's latest free model, enter your free API key below:
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-300">
+                  Google AI Studio Free API Key
+                </label>
+                <input
+                  type="password"
+                  value={aiApiKeyInput}
+                  onChange={(e) => setAiApiKeyInput(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="form-input text-xs py-2 px-3 bg-[#141842] border-purple-500/30 text-slate-100 rounded-lg w-full font-mono focus:border-purple-400"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs space-y-1.5 text-slate-300">
+                <p className="font-semibold text-purple-300">How to get a 100% Free API Key (30 Seconds):</p>
+                <ol className="list-decimal list-inside text-[11px] text-slate-400 space-y-1">
+                  <li>Visit <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-purple-400 hover:underline font-medium">aistudio.google.com/apikey</a></li>
+                  <li>Sign in with your Google Account</li>
+                  <li>Click <span className="text-white font-medium">"Create API Key"</span> and copy it</li>
+                  <li>Paste it above and click Save (Free 1,500 requests/day, no credit card)</li>
+                </ol>
+              </div>
+
+              {aiKeySavedFeedback && (
+                <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+                  <Check size={14} />
+                  <span>API Key saved successfully! Live AI completions active.</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t"
+                 style={{ borderColor: isLight ? '#e2e8f0' : 'rgba(255,255,255,.1)' }}>
+              <button
+                type="button"
+                onClick={() => setIsAiConfigOpen(false)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStoredGeminiKey(aiApiKeyInput)
+                  setAiKeySavedFeedback(true)
+                  setTimeout(() => setAiKeySavedFeedback(false), 3000)
+                }}
+                className="btn-primary text-xs px-4 py-2 rounded-xl font-semibold shadow-md flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check size={14} />
+                <span>Save API Key</span>
+              </button>
             </div>
           </div>
         </div>

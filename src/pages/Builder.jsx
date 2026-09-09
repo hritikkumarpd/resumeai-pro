@@ -1493,33 +1493,46 @@ export default function Builder() {
 </body>
 </html>`
 
-      // 1. Try Direct Vector PDF via Backend Puppeteer (100% Selectable Text & Active Links)
-      try {
-        const response = await fetch('/api/pdf/render-html', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            html: fullHtml,
-            name: data.personal.name || 'Resume'
-          })
-        })
+      // 1. Try Direct Vector PDF via Backend Puppeteer (100% Selectable Text & Active Clickable Links)
+      const endpoints = [
+        '/api/pdf/render-html',
+        'http://localhost:4000/api/pdf/render-html',
+      ]
+      if (import.meta.env.VITE_API_URL) {
+        endpoints.unshift(`${import.meta.env.VITE_API_URL}/api/pdf/render-html`)
+      }
 
-        if (response.ok) {
-          const blob = await response.blob()
-          const url = window.URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          const safeName = (data.personal.name || 'Resume').replace(/[^a-zA-Z0-9_-]/g, '_')
-          a.href = url
-          a.download = `${safeName}_ATS_Resume.pdf`
-          document.body.appendChild(a)
-          a.click()
-          document.body.removeChild(a)
-          window.URL.revokeObjectURL(url)
-          setIsGeneratingPdf(false)
-          return
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              html: fullHtml,
+              name: resumeTitle || data.personal.name || 'Resume'
+            })
+          })
+
+          const contentType = response.headers.get('content-type') || ''
+          if (response.ok && (contentType.includes('application/pdf') || response.status === 200)) {
+            const blob = await response.blob()
+            if (blob.size > 2000) {
+              const url = window.URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              const safeName = (resumeTitle || data.personal.name || 'Resume').replace(/[^a-zA-Z0-9_-]/g, '_')
+              a.href = url
+              a.download = `${safeName}.pdf`
+              document.body.appendChild(a)
+              a.click()
+              document.body.removeChild(a)
+              window.URL.revokeObjectURL(url)
+              setIsGeneratingPdf(false)
+              return
+            }
+          }
+        } catch (apiErr) {
+          console.warn(`Backend vector PDF download error via ${endpoint}, trying fallback:`, apiErr?.message)
         }
-      } catch (apiErr) {
-        console.warn('Backend vector PDF download error, falling back to browser print:', apiErr)
       }
 
       // 2. Fallback: In-Viewport Vector Browser Print

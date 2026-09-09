@@ -136,16 +136,24 @@ CREATE POLICY "Users view own subscription" ON public.subscriptions
   FOR SELECT USING (auth.uid() = user_id);
 
 -- ── Admin Stats View ─────────────────────────────────────────────
-CREATE OR REPLACE VIEW public.admin_stats AS
+DROP VIEW IF EXISTS public.admin_stats;
+
+CREATE OR REPLACE VIEW public.admin_stats
+WITH (security_invoker = true) AS
 SELECT
-  (SELECT COUNT(*) FROM auth.users) AS total_users,
+  (SELECT COUNT(*) FROM public.profiles) AS total_users,
   (SELECT COUNT(*) FROM public.resumes) AS total_resumes,
   (SELECT COUNT(*) FROM public.cover_letters) AS total_cover_letters,
   (SELECT COUNT(*) FROM public.ats_history) AS total_ats_scans,
   (SELECT COUNT(*) FROM public.profiles WHERE plan = 'pro') AS pro_users,
   (SELECT COUNT(*) FROM public.profiles WHERE plan = 'lifetime') AS lifetime_users,
-  (SELECT COUNT(*) FROM auth.users WHERE created_at > NOW() - INTERVAL '7 days') AS new_users_week,
-  (SELECT COUNT(*) FROM auth.users WHERE created_at > NOW() - INTERVAL '30 days') AS new_users_month;
+  (SELECT COUNT(*) FROM public.profiles WHERE created_at > NOW() - INTERVAL '7 days') AS new_users_week,
+  (SELECT COUNT(*) FROM public.profiles WHERE created_at > NOW() - INTERVAL '30 days') AS new_users_month;
+
+-- Restrict view access so auth data is not exposed to public/anon API
+REVOKE ALL ON public.admin_stats FROM anon, authenticated;
+GRANT SELECT ON public.admin_stats TO service_role;
+
 
 -- ── Storage Buckets ──────────────────────────────────────────────
 -- Run these in Supabase Dashboard > Storage > Create Bucket:

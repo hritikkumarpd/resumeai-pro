@@ -112,10 +112,12 @@ export function AuthProvider({ children }) {
   }
 
   const signInWithGoogle = async () => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    const origin = isLocal ? window.location.origin : 'https://resumeaihritik.vercel.app'
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        redirectTo: `${origin}/dashboard`,
       },
     })
     if (error) throw error

@@ -5,6 +5,7 @@ const resend = process.env.RESEND_API_KEY
   : null
 
 const FROM = process.env.EMAIL_FROM || 'ResumeAI Pro <noreply@resumeaipro.com>'
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://resumeaihritik.vercel.app'
 
 /* ── Email Templates ────────────────────────────────────────── */
 function welcomeHtml(name) {
@@ -36,7 +37,7 @@ function welcomeHtml(name) {
         <li>✉️ Generate personalized cover letters with AI</li>
         <li>📄 Choose from 50+ premium templates</li>
       </ul>
-      <a href="${process.env.FRONTEND_URL}/builder" class="btn">Start Building Your Resume →</a>
+      <a href="${FRONTEND_URL}/builder" class="btn">Start Building Your Resume →</a>
       <p style="font-size:13px;color:#475569;">Questions? Just reply to this email — we're here to help.</p>
     </div>
     <div class="footer">© ${new Date().getFullYear()} ResumeAI Pro. All rights reserved.<br>You're receiving this because you signed up at resumeaipro.com</div>
@@ -105,7 +106,7 @@ function subscriptionConfirmedHtml(name, plan) {
         <li>✅ Cover Letter Generator</li>
         <li>✅ Priority Support</li>
       </ul>
-      <a href="${process.env.FRONTEND_URL}/builder" class="btn">Start Building →</a>
+      <a href="${FRONTEND_URL}/builder" class="btn">Start Building →</a>
     </div>
     <div class="footer">© ${new Date().getFullYear()} ResumeAI Pro</div>
   </div>

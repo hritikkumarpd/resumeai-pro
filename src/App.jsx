@@ -90,9 +90,26 @@ function AppRoutes() {
   )
 }
 
+/* ── Canonical Domain Guard (Locks production domain to resumeaihritik.vercel.app) ── */
+const CANONICAL_DOMAIN = 'resumeaihritik.vercel.app'
+
+function CanonicalDomainGuard() {
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname
+    const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.endsWith('.local')
+    if (!isLocal && host !== CANONICAL_DOMAIN) {
+      const targetUrl = `https://${CANONICAL_DOMAIN}${window.location.pathname}${window.location.search}${window.location.hash}`
+      window.location.replace(targetUrl)
+      return null
+    }
+  }
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <CanonicalDomainGuard />
       <ThemeProvider>
         <AuthProvider>
           <AppRoutes />
@@ -101,3 +118,4 @@ export default function App() {
     </BrowserRouter>
   )
 }
+

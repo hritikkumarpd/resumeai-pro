@@ -112,7 +112,7 @@ function Hero() {
             </div>
 
             <div className="flex items-center gap-8 flex-wrap animate-fade-up" style={{ animationDelay: '0.4s' }}>
-              {[{ v: '4.3M+', l: 'Users' }, { v: '93%', l: 'Interview Rate' }, { v: '50+', l: 'Templates' }, { v: '4.9★', l: 'Rating' }].map(s => (
+              {[{ v: '100+', l: 'Users' }, { v: '90%', l: 'Interview Rate' }, { v: '10+', l: 'Templates' }, { v: '4.3★', l: 'Rating' }].map(s => (
                 <div key={s.l}>
                   <div className="font-heading font-extrabold text-2xl gradient-text">{s.v}</div>
                   <div className="text-slate-500 text-xs mt-0.5">{s.l}</div>
@@ -166,7 +166,7 @@ function Hero() {
                       Experience
                     </div>
                     <div className="flex justify-between text-[8px] mb-0.5">
-                      <span className="font-bold text-black">Software Development Engineer | TechCorp</span>
+                      <span className="font-bold text-black">Software Development Engineer | Hritik InfoTech</span>
                       <span className="text-gray-600">2023 – Present</span>
                     </div>
                     <div className="flex flex-col gap-1 pl-2">
@@ -191,7 +191,7 @@ function Hero() {
                       Technical Skills
                     </div>
                     <div className="text-[7.5px] text-gray-900 leading-snug space-y-0.5">
-                      <div><span className="font-bold text-black">Languages:</span> Java, Python, C++, JavaScript, SQL</div>
+                      <div><span className="font-bold text-black">Languages:</span>  C++, JavaScript, SQL</div>
                       <div><span className="font-bold text-black">Frameworks:</span> React.js, Node.js, Express, Docker, AWS</div>
                     </div>
                   </div>

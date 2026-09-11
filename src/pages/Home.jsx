@@ -22,8 +22,8 @@ const steps = [
 ]
 
 const testimonials = [
-  { name: 'Priya Sharma', role: 'Software Engineer @ Google', text: 'ResumeAI Pro helped me land a $180k role at Google. The ATS checker showed me exactly what was missing. 10/10!', avatar: 'PS', color: '#7C3AED', rating: 5 },
-  { name: 'Marcus Johnson', role: 'Product Manager @ Meta', text: 'I applied to 12 jobs and got 9 interviews. The AI-generated bullet points were way better than anything I could write.', avatar: 'MJ', color: '#06B6D4', rating: 5 },
+  { name: 'Priya Sharma', role: 'Software Engineer @ Lala Company', text: 'ResumeAI Pro helped me land a $1000 role at Lala Company. The ATS checker showed me exactly what was missing. 10/10!', avatar: 'PS', color: '#7C3AED', rating: 5 },
+  { name: 'Marcus Johnson', role: 'Hritik @ Hritik InfoTech', text: 'I applied to 12 jobs and got 9 interviews. The AI-generated bullet points were way better than anything I could write.', avatar: 'MJ', color: '#06B6D4', rating: 5 },
   { name: 'Anika Patel', role: 'Data Scientist @ Amazon', text: 'The ATS score feature is a game changer. Went from 0 callbacks to 3 offers in a month!', avatar: 'AP', color: '#EC4899', rating: 5 },
   { name: 'James Chen', role: 'UX Designer @ Apple', text: 'Beautiful templates, incredible AI, and the cover letter tool saves hours. This is the future of job applications.', avatar: 'JC', color: '#10B981', rating: 5 },
   { name: 'Fatima Al-Rashid', role: 'Finance Analyst @ Goldman Sachs', text: 'Worth every penny. Got my first Wall Street job with the help of ResumeAI Pro\'s AI-optimized resume.', avatar: 'FA', color: '#F59E0B', rating: 5 },
@@ -88,7 +88,7 @@ function Hero() {
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full w-fit text-xs font-semibold animate-fade-up"
               style={{ background: 'rgba(124,58,237,.15)', border: '1px solid rgba(124,58,237,.4)', color: '#A78BFA' }}>
               <span className="pulse-dot" />
-              Trusted by 4.3M+ job seekers worldwide
+              Trusted by 100+ job seekers worldwide
             </div>
 
             <h1 className="font-heading font-extrabold leading-[1.08] tracking-tight animate-fade-up"
@@ -138,7 +138,7 @@ function Hero() {
                   <div className="font-bold text-black text-sm uppercase tracking-wider" style={{ letterSpacing: '1px' }}>
                     HRITIK KUMAR
                   </div>
-                  <div className="text-[8px] text-gray-750 mt-0.5">
+                  <div className="text-[8px] text-black-750 mt-0.5">
                     +91 9471636126 | hritikkumarpd@gmail.com | LinkedIn | Bengaluru, India
                   </div>
                 </div>
@@ -323,7 +323,7 @@ function Testimonials() {
         <div className="text-center max-w-xl mx-auto mb-16 reveal">
           <div className="section-tag mb-4 mx-auto w-fit"><Star size={12} /> Success Stories</div>
           <h2 className="font-heading font-bold mb-3" style={{ fontSize: 'clamp(2rem,4vw,3rem)' }}>
-            Join <span className="gradient-text">4.3 million</span> people who got hired
+            Join <span className="gradient-text">100+</span> people who got hired
           </h2>
           <p className="text-slate-400">Real results from real job seekers. Their success could be yours.</p>
         </div>

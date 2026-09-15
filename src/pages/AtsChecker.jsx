@@ -5,27 +5,60 @@ import { calcAtsScore } from '../lib/utils'
 import { useAuth } from '../context/AuthContext'
 import { atsApi } from '../lib/api'
 
-// Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+// Set up PDF.js worker with multiple fallback options
+const initPdfWorker = () => {
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    // Try multiple CDN sources
+    const workerUrl = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
+  }
+}
+
+initPdfWorker()
 
 // Function to extract text from PDF
 async function extractTextFromPdf(file) {
   try {
     const arrayBuffer = await file.arrayBuffer()
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer })
+    
+    const pdf = await loadingTask.promise
+    if (!pdf || pdf.numPages === 0) {
+      throw new Error('PDF has no pages')
+    }
+    
     let text = ''
     
     for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i)
-      const textContent = await page.getTextContent()
-      const pageText = textContent.items.map(item => item.str).join(' ')
-      text += pageText + ' '
+      try {
+        const page = await pdf.getPage(i)
+        if (!page) continue
+        
+        const textContent = await page.getTextContent()
+        if (!textContent || !textContent.items) continue
+        
+        const pageText = textContent.items
+          .filter(item => item.str)
+          .map(item => item.str)
+          .join(' ')
+        
+        if (pageText) {
+          text += pageText + ' '
+        }
+      } catch (pageErr) {
+        console.warn(`Error extracting page ${i}:`, pageErr)
+        continue
+      }
+    }
+    
+    if (!text.trim()) {
+      throw new Error('No text content found in PDF')
     }
     
     return text.trim()
   } catch (err) {
     console.error('Error extracting PDF text:', err)
-    throw new Error('Failed to extract text from PDF. Please ensure it\'s a valid PDF file.')
+    throw new Error(`Failed to extract text from PDF: ${err.message}`)
   }
 }
 

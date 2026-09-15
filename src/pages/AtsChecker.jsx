@@ -5,16 +5,9 @@ import { calcAtsScore } from '../lib/utils'
 import { useAuth } from '../context/AuthContext'
 import { atsApi } from '../lib/api'
 
-// Set up PDF.js worker with multiple fallback options
-const initPdfWorker = () => {
-  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    // Try multiple CDN sources
-    const workerUrl = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
-  }
-}
-
-initPdfWorker()
+// Set up PDF.js worker - use relative path to bundled worker
+const workerPath = new URL('../../../node_modules/pdfjs-dist/build/pdf.worker.js', import.meta.url).href
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerPath
 
 // Function to extract text from PDF
 async function extractTextFromPdf(file) {

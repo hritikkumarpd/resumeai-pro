@@ -1,8 +1,33 @@
 import { useState, useRef, useEffect } from 'react'
-import { Upload, Target, CheckCircle, XCircle, AlertCircle, Zap, BarChart2, RefreshCw } from 'lucide-react'
+import { Upload, Target, CheckCircle, XCircle, AlertCircle, Zap, BarChart2, RefreshCw, FileText } from 'lucide-react'
+import * as pdfjsLib from 'pdfjs-dist'
 import { calcAtsScore } from '../lib/utils'
 import { useAuth } from '../context/AuthContext'
 import { atsApi } from '../lib/api'
+
+// Set up PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+
+// Function to extract text from PDF
+async function extractTextFromPdf(file) {
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+    let text = ''
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i)
+      const textContent = await page.getTextContent()
+      const pageText = textContent.items.map(item => item.str).join(' ')
+      text += pageText + ' '
+    }
+    
+    return text.trim()
+  } catch (err) {
+    console.error('Error extracting PDF text:', err)
+    throw new Error('Failed to extract text from PDF. Please ensure it\'s a valid PDF file.')
+  }
+}
 
 const sampleJob = `We are looking for a Senior Software Engineer with experience in:
 - React, TypeScript, Node.js, Python
@@ -65,7 +90,9 @@ export default function AtsChecker() {
   const [resume, setResume] = useState(sampleResume)
   const [result, setResult] = useState(null)
   const [scanning, setScanning] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const fileRef = useRef()
+  const jobFileRef = useRef()
 
   useEffect(() => {
     if (user) {
@@ -120,12 +147,60 @@ Bachelor of Science / Technology in Computer Science or related field`
     setScanning(false)
   }
 
-  const handleFile = (e) => {
+  const handleFile = async (e) => {
     const file = e.target.files[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => setResume(ev.target.result)
-    reader.readAsText(file)
+
+    try {
+      setUploading(true)
+      let text = ''
+      
+      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        // Extract text from PDF
+        text = await extractTextFromPdf(file)
+      } else {
+        // Read as text file
+        text = await file.text()
+      }
+      
+      setResume(text)
+    } catch (err) {
+      alert('Error reading file: ' + err.message)
+      console.error('File read error:', err)
+    } finally {
+      setUploading(false)
+    }
+    
+    // Reset file input
+    if (e.target) e.target.value = ''
+  }
+
+  const handleJobDescFile = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    try {
+      setUploading(true)
+      let text = ''
+      
+      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        // Extract text from PDF
+        text = await extractTextFromPdf(file)
+      } else {
+        // Read as text file
+        text = await file.text()
+      }
+      
+      setJobDesc(text)
+    } catch (err) {
+      alert('Error reading file: ' + err.message)
+      console.error('File read error:', err)
+    } finally {
+      setUploading(false)
+    }
+    
+    // Reset file input
+    if (e.target) e.target.value = ''
   }
 
   return (
@@ -155,7 +230,11 @@ Bachelor of Science / Technology in Computer Science or related field`
               <div className="px-5 py-3.5 border-b flex items-center gap-2" style={{ borderColor: 'rgba(124,58,237,.2)', background: '#0D0F2E' }}>
                 <Target size={14} className="text-cyan-400" />
                 <span className="font-semibold text-sm">Job Description</span>
-                <span className="ml-auto text-xs text-slate-600">Paste from any job posting</span>
+                <button onClick={() => jobFileRef.current.click()}
+                        className="ml-auto flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
+                  <Upload size={11} /> Upload PDF
+                </button>
+                <input ref={jobFileRef} type="file" accept=".pdf,.txt,.md" className="hidden" onChange={handleJobDescFile} disabled={uploading} />
               </div>
               <textarea
                 value={jobDesc}
@@ -171,16 +250,17 @@ Bachelor of Science / Technology in Computer Science or related field`
               <div className="px-5 py-3.5 border-b flex items-center gap-2" style={{ borderColor: 'rgba(124,58,237,.2)', background: '#0D0F2E' }}>
                 <BarChart2 size={14} className="text-purple-400" />
                 <span className="font-semibold text-sm">Your Resume</span>
-                <button onClick={() => fileRef.current.click()}
-                        className="ml-auto flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors">
-                  <Upload size={11} /> Upload .txt
+                <button onClick={() => fileRef.current.click()} disabled={uploading}
+                        className="ml-auto flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50">
+                  {uploading ? <RefreshCw size={11} className="animate-spin" /> : <Upload size={11} />}
+                  {uploading ? 'Processing...' : 'Upload PDF or .txt'}
                 </button>
-                <input ref={fileRef} type="file" accept=".txt,.md" className="hidden" onChange={handleFile} />
+                <input ref={fileRef} type="file" accept=".pdf,.txt,.md" className="hidden" onChange={handleFile} disabled={uploading} />
               </div>
               <textarea
                 value={resume}
                 onChange={e => setResume(e.target.value)}
-                placeholder="Paste your resume text here..."
+                placeholder="Paste your resume text here or upload PDF..."
                 className="w-full p-5 bg-transparent text-slate-300 text-sm leading-relaxed resize-none outline-none"
                 style={{ minHeight: 320 }}
               />

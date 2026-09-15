@@ -17,7 +17,8 @@ export default function Login() {
 
   const { signIn, signUp, signInWithGoogle, forgotPassword } = useAuth()
   const navigate = useNavigate()
-  const { register, handleSubmit, formState: { errors }, reset } = useForm()
+  const { register, handleSubmit, formState: { errors }, reset, watch } = useForm()
+  const emailValue = watch('email') || ''
 
   const switchTab = (t) => {
     setTab(t)
@@ -280,8 +281,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => {
-                        const formEmail = document.querySelector('input[type="email"]')?.value || ''
-                        setForgotEmail(formEmail)
+                        setForgotEmail(emailValue)
                         setForgotMode(true)
                       }}
                       className="text-purple-400 text-xs hover:text-purple-300 transition-colors cursor-pointer"

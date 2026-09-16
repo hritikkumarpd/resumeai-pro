@@ -166,7 +166,7 @@ export default function Pricing() {
             Start free, upgrade when you're ready. All prices in Indian Rupees (₹).
           </p>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <Check size={12} /> Razorpay Test Mode Active
+            <Check size={12} /> 100% Secure Checkout with Razorpay
           </div>
         </div>
       </section>
@@ -270,7 +270,7 @@ export default function Pricing() {
           </div>
 
           <p className="text-center text-slate-500 text-sm mt-8">
-            ✓ Razorpay Test Mode &nbsp;·&nbsp; ✓ Free plan forever &nbsp;·&nbsp; ✓ Cancel anytime &nbsp;·&nbsp; ✓ Instant access
+            ✓ Secure Razorpay Checkout &nbsp;·&nbsp; ✓ Free plan forever &nbsp;·&nbsp; ✓ Cancel anytime &nbsp;·&nbsp; ✓ Instant access
           </p>
         </div>
       </section>

@@ -35,3 +35,4 @@ server/.env
 agent/
 skills-lock.json
 
+.vercel

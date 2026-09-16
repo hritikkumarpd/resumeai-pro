@@ -67,7 +67,7 @@ function ScoreRing({ score, size = 64 }) {
 }
 
 export default function Dashboard() {
-  const { user, profile, signOut, updateProfile, getUserDefaults } = useAuth()
+  const { user, profile, isPro, signOut, updateProfile, getUserDefaults } = useAuth()
   const { theme } = useTheme()
   const isLight = theme === 'light'
   const navigate = useNavigate()
@@ -80,7 +80,7 @@ export default function Dashboard() {
   const firstName = fullName ? fullName.trim().split(' ')[0] : (user?.email ? user.email.split('@')[0] : 'Professional')
   const displayName = fullName || (user?.email ? user.email.split('@')[0] : 'User')
   const userInitial = (firstName || 'U')[0].toUpperCase()
-  const planLabel = (profile?.plan === 'lifetime') ? 'Lifetime Pro' : (profile?.plan === 'pro') ? 'Pro Plan' : 'Free Plan'
+  const planLabel = (profile?.plan === 'yearly') ? 'Pro Yearly' : (profile?.plan === 'monthly') ? 'Pro Monthly' : (profile?.plan === 'lifetime' ? 'Lifetime Pro' : (profile?.plan === 'pro' ? 'Pro Plan' : 'Free Plan'))
 
   // ── Real Data State ──────────────────────────────────────────
   const [resumes, setResumes] = useState([])
@@ -694,7 +694,7 @@ export default function Dashboard() {
                       <div className="text-xs text-slate-500 mb-1">Subscription Plan</div>
                       <div className="font-semibold flex items-center justify-between">
                         <span className="text-purple-400 font-bold">{planLabel}</span>
-                        {profile?.plan !== 'pro' && profile?.plan !== 'lifetime' && (
+                        {!isPro && (
                           <Link to="/pricing" className="text-xs text-cyan-400 hover:underline flex items-center gap-1">
                             Upgrade <ExternalLink size={12} />
                           </Link>
@@ -1215,7 +1215,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Upgrade CTA */}
-                {profile?.plan !== 'pro' && profile?.plan !== 'lifetime' && (
+                {!isPro && (
                   <div className="mt-4 p-5 rounded-2xl relative overflow-hidden"
                        style={{ background: 'linear-gradient(135deg,rgba(124,58,237,.25),rgba(6,182,212,.12))', border: '1px solid rgba(124,58,237,.35)' }}>
                     <div className="absolute top-0 right-0 w-24 h-24 rounded-full opacity-20"

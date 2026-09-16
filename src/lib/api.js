@@ -72,9 +72,10 @@ export const resumeApi = {
 
 /* ── ATS ────────────────────────────────────────────────────────── */
 export const atsApi = {
-  analyze:       (data)  => api.post('/ats/analyze', data),
-  history:       (params) => api.get('/ats/history', { params }),
-  deleteHistory: (id)    => api.delete(`/ats/history/${id}`),
+  analyze:        (data)   => api.post('/ats/analyze', data),
+  analyzeResume:  (data)   => api.post('/ats/analyze-resume', data),
+  history:        (params) => api.get('/ats/history', { params }),
+  deleteHistory:  (id)     => api.delete(`/ats/history/${id}`),
 }
 
 /* ── Cover Letters ──────────────────────────────────────────────── */
@@ -99,12 +100,16 @@ export const pdfApi = {
 export const aiApi = {
   enhanceSummary: (data) => api.post('/ai/enhance-summary', data),
   enhanceBullets: (data) => api.post('/ai/enhance-bullets', data),
+  enhance:        (data) => api.post('/ai/enhance', data),
 }
 
-/* ── Payment (Razorpay) ────────────────────────────────────────── */
+/* ── Payment (Razorpay Standard Checkout) ───────────────────────── */
 export const paymentApi = {
-  createOrder: (plan) => api.post('/payment/create-order', { plan }),
-  verify:      (data) => api.post('/payment/verify', data),
+  createOrder: (planOrOptions) => {
+    const payload = typeof planOrOptions === 'string' ? { plan: planOrOptions } : planOrOptions
+    return api.post('/create-order', payload)
+  },
+  verify: (data) => api.post('/verify-payment', data),
 }
 
 /* ── Admin ─────────────────────────────────────────────────────── */

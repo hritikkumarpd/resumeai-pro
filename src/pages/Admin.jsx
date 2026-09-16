@@ -425,7 +425,7 @@ export default function Admin() {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase ${
-                        u.plan === 'pro' || u.plan === 'lifetime'
+                        u.plan === 'monthly' || u.plan === 'yearly' || u.plan === 'pro' || u.plan === 'lifetime'
                           ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                           : 'bg-slate-500/20 text-slate-400 border border-slate-500/20'
                       }`}>
@@ -492,16 +492,16 @@ export default function Admin() {
                         value={u.plan || 'free'}
                         onChange={(e) => handleUpdatePlan(u.id, e.target.value)}
                         className={`text-[11px] font-bold py-1 px-2 rounded-lg border cursor-pointer outline-none ${
-                          u.plan === 'lifetime'
+                          u.plan === 'yearly' || u.plan === 'lifetime'
                             ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                            : u.plan === 'pro'
+                            : u.plan === 'monthly' || u.plan === 'pro'
                               ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
                               : 'bg-slate-500/15 text-slate-300 border-slate-500/25'
                         }`}
                       >
-                        <option value="free" className="bg-[#111338] text-white">Free Plan</option>
-                        <option value="pro" className="bg-[#111338] text-white">Pro Plan</option>
-                        <option value="lifetime" className="bg-[#111338] text-white">Lifetime Pro</option>
+                        <option value="free" className="bg-[#111338] text-white">Free Plan (₹0)</option>
+                        <option value="monthly" className="bg-[#111338] text-white">Pro Monthly (₹99)</option>
+                        <option value="yearly" className="bg-[#111338] text-white">Pro Yearly (₹999)</option>
                       </select>
                     </td>
                     <td className="py-3 px-3 text-slate-400">

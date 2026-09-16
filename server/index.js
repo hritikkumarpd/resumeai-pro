@@ -50,10 +50,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type','Authorization','X-Admin-Secret'],
 }))
 
-// JSON body parsing (no raw body middleware needed — Razorpay uses HMAC on parsed JSON)
-
-// JSON body parsing for all other routes
-app.use(express.json({ limit: '10mb' }))
+// JSON body parsing with rawBody retention for webhook signature verification
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf
+  },
+}))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
 /* ── Rate Limiting ──────────────────────────────────────────── */
@@ -69,9 +72,21 @@ const authLimiter = rateLimit({
   max: 20,
   message: { error: 'Too many auth attempts, please try again in 15 minutes.' },
 })
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: 'Too many AI requests, please try again in a few minutes.' },
+})
+const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many payment requests, please try again later.' },
+})
 
 app.use('/api/', globalLimiter)
 app.use('/api/auth/', authLimiter)
+app.use('/api/ai/', aiLimiter)
+app.use('/api/payment/', paymentLimiter)
 
 /* ── Routes ─────────────────────────────────────────────────── */
 app.use('/api/auth',          authRoutes)
@@ -79,6 +94,10 @@ app.use('/api/resumes',       resumeRoutes)
 app.use('/api/ats',           atsRoutes)
 app.use('/api/cover-letters', coverLetterRoutes)
 app.use('/api/payment',       paymentRoutes)
+// Standard Razorpay Standard Checkout endpoints
+const { optionalAuth } = require('./middleware/requireAuth')
+app.post('/api/create-order', paymentLimiter, optionalAuth, paymentRoutes.handleCreateOrder)
+app.post('/api/verify-payment', paymentLimiter, optionalAuth, paymentRoutes.handleVerifyPayment)
 app.use('/api/pdf',           pdfRoutes)
 app.use('/api/admin',         adminRoutes)
 app.use('/api/ai',            aiRoutes)

@@ -1,19 +1,18 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   Download, Eye, ChevronDown, ChevronUp, Plus, Trash2,
   Zap, Palette, Type, LayoutTemplate, Brain, Target, GripVertical,
   ZoomIn, ZoomOut, Maximize2, Columns, Edit3, CheckCircle2, Sparkles,
-  ArrowUp, ArrowDown, Camera, X, Settings2, Key, Check, Sun, Moon,
-  Sliders, RotateCcw, RotateCw, SunDim, Contrast, Save, FileText, Edit2
+  ArrowUp, ArrowDown, Camera, X, Settings2, Check, Sun, Moon,
+  Sliders, RotateCcw, RotateCw, SunDim, Contrast, Save, FileText, Edit2,
+  AlertCircle, Loader2, RefreshCw
 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import {
   enhanceSummaryWithAI,
   enhanceBulletsWithAI,
-  getStoredGeminiKey,
-  setStoredGeminiKey
 } from '../lib/aiService'
 import { resumeApi } from '../lib/api'
 import { resumeStorage } from '../lib/resumeStorage'
@@ -1093,15 +1092,16 @@ export default function Builder() {
   // Resume Save & Load State
   const [currentResumeId, setCurrentResumeId] = useState(resumeIdFromUrl || null)
   const [resumeTitle, setResumeTitle] = useState('My Resume')
-  const [isSavingResume, setIsSavingResume] = useState(false)
-  const [saveResumeSuccess, setSaveResumeSuccess] = useState(false)
+  const [saveStatus, setSaveStatus] = useState('idle') // 'idle' | 'saving' | 'saved' | 'error'
+  const saveVersionRef = useRef(0) // race-condition guard
+  const autosaveTimerRef = useRef(null)
+  const lastSavedDataRef = useRef(null)
   
-  // AI State & Custom Key Configuration
+  // AI State (Preview-based flow — no user API keys)
   const [isEnhancingSummary, setIsEnhancingSummary] = useState(false)
   const [enhancingExpId, setEnhancingExpId] = useState(null)
-  const [isAiConfigOpen, setIsAiConfigOpen] = useState(false)
-  const [aiApiKeyInput, setAiApiKeyInput] = useState(getStoredGeminiKey() || '')
-  const [aiKeySavedFeedback, setAiKeySavedFeedback] = useState(false)
+  const [aiPreview, setAiPreview] = useState(null) // { type, original, enhanced, targetId? }
+  const [aiPreviewError, setAiPreviewError] = useState(null)
 
   // PDF Export State
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
@@ -1209,32 +1209,62 @@ export default function Builder() {
     return () => { isMounted = false }
   }, [resumeIdFromUrl, user])
 
-  // Save or update resume (stored persistently in user account storage + cloud sync)
-  const handleSaveResume = async () => {
-    setIsSavingResume(true)
+  // Core save function (shared by autosave and manual save)
+  const executeSave = useCallback(async (dataToSave, idOverride) => {
+    const version = ++saveVersionRef.current
+    setSaveStatus('saving')
     try {
-      const currentScore = calcScore(data)
+      const currentScore = calcScore(dataToSave)
       const payload = {
-        id: currentResumeId,
-        title: resumeTitle || (data.personal?.name ? `${data.personal.name}'s Resume` : 'My Resume'),
-        data,
+        id: idOverride || currentResumeId,
+        title: resumeTitle || (dataToSave.personal?.name ? `${dataToSave.personal.name}'s Resume` : 'My Resume'),
+        data: dataToSave,
         template,
         accent_color: accent,
         font,
-        ats_score: currentScore
+        ats_score: currentScore,
       }
       const saved = await resumeStorage.save(payload, user)
-      if (saved?.id) {
-        setCurrentResumeId(saved.id)
-      }
-      setSaveResumeSuccess(true)
-      setTimeout(() => setSaveResumeSuccess(false), 3000)
+
+      // Guard against stale saves (race condition)
+      if (saveVersionRef.current !== version) return
+
+      if (saved?.id) setCurrentResumeId(saved.id)
+      lastSavedDataRef.current = JSON.stringify(dataToSave)
+      setSaveStatus('saved')
+      setTimeout(() => {
+        if (saveVersionRef.current === version) setSaveStatus('idle')
+      }, 3000)
     } catch (err) {
-      console.error('Failed to save resume:', err)
-      alert('Failed to save resume. Please try again.')
-    } finally {
-      setIsSavingResume(false)
+      if (saveVersionRef.current !== version) return
+      console.error('Save failed:', err)
+      setSaveStatus('error')
+      setTimeout(() => {
+        if (saveVersionRef.current === version) setSaveStatus('idle')
+      }, 5000)
     }
+  }, [currentResumeId, resumeTitle, template, accent, font, user])
+
+  // Debounced autosave: triggers 1s after last edit
+  useEffect(() => {
+    // Skip autosave if data hasn't actually changed
+    const serialized = JSON.stringify(data)
+    if (serialized === lastSavedDataRef.current) return
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    autosaveTimerRef.current = setTimeout(() => {
+      executeSave(data)
+    }, 1000)
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    }
+  }, [data, executeSave])
+
+  // Manual save handler (for the Save button)
+  const handleSaveResume = () => {
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    executeSave(data)
   }
 
   // Automatically adjust view mode on small screens (< 1024px)
@@ -1376,35 +1406,78 @@ export default function Builder() {
     setSectionOrder(newOrder)
   }
 
-  // AI Auto-Enhance Summary with Gemini
+  // AI Auto-Enhance Summary with Gemini (preview-based)
   const handleEnhanceSummary = async () => {
     setIsEnhancingSummary(true)
+    setAiPreviewError(null)
     try {
-      const enhanced = await enhanceSummaryWithAI({
+      const result = await enhanceSummaryWithAI({
         summary: data.summary,
         role: data.personal.title,
         skills: data.skills
       })
-      if (enhanced) upd('summary', enhanced)
+      if (result?.enhanced) {
+        setAiPreview({
+          type: 'summary',
+          original: data.summary,
+          enhanced: result.enhanced,
+        })
+      }
+    } catch (err) {
+      setAiPreviewError(err?.response?.data?.error || err?.message || 'AI enhancement failed. Please try again.')
+      setTimeout(() => setAiPreviewError(null), 5000)
     } finally {
       setIsEnhancingSummary(false)
     }
   }
 
-  // AI Auto-Enhance Bullets with Gemini
+  // AI Auto-Enhance Bullets with Gemini (preview-based)
   const handleEnhanceBullets = async (expId) => {
     const exp = data.experience.find(e => e.id === expId)
     if (!exp) return
     setEnhancingExpId(expId)
+    setAiPreviewError(null)
     try {
-      const enhanced = await enhanceBulletsWithAI({
+      const result = await enhanceBulletsWithAI({
         bullets: exp.bullets,
         role: exp.role,
         company: exp.company
       })
-      if (enhanced) updExp(expId, 'bullets', enhanced)
+      if (result?.bullets) {
+        setAiPreview({
+          type: 'bullets',
+          targetId: expId,
+          original: exp.bullets,
+          enhanced: result.bullets,
+        })
+      }
+    } catch (err) {
+      setAiPreviewError(err?.response?.data?.error || err?.message || 'AI enhancement failed. Please try again.')
+      setTimeout(() => setAiPreviewError(null), 5000)
     } finally {
       setEnhancingExpId(null)
+    }
+  }
+
+  // Apply AI enhancement from preview modal
+  const handleApplyAiPreview = () => {
+    if (!aiPreview) return
+    if (aiPreview.type === 'summary') {
+      upd('summary', aiPreview.enhanced)
+    } else if (aiPreview.type === 'bullets' && aiPreview.targetId) {
+      updExp(aiPreview.targetId, 'bullets', aiPreview.enhanced)
+    }
+    setAiPreview(null)
+  }
+
+  // Regenerate from preview modal
+  const handleRegenerateAiPreview = () => {
+    if (!aiPreview) return
+    setAiPreview(null)
+    if (aiPreview.type === 'summary') {
+      handleEnhanceSummary()
+    } else if (aiPreview.type === 'bullets' && aiPreview.targetId) {
+      handleEnhanceBullets(aiPreview.targetId)
     }
   }
 
@@ -1761,16 +1834,14 @@ export default function Builder() {
             <span className="hidden sm:inline">{isDark ? 'Light' : 'Dark'}</span>
           </button>
 
-          {/* AI Active Badge (Configurable) */}
+          {/* AI Active Badge (Server-side — no user configuration needed) */}
           <div
-            onClick={() => setIsAiConfigOpen(true)}
-            title="AI Resume Intelligence Active (Click to configure API Key)"
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 cursor-pointer shadow-sm hover:bg-emerald-500/25 transition-colors"
+            title="AI Resume Intelligence Active (Powered by server-side AI)"
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 shadow-sm"
           >
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <Sparkles size={12} className="text-emerald-400" />
             <span className="hidden sm:inline font-semibold">AI Active</span>
-            <Settings2 size={11} className="text-emerald-400/70 hover:text-emerald-300 ml-0.5" />
           </div>
 
           {/* Zoom controls */}
@@ -1798,28 +1869,42 @@ export default function Builder() {
             </button>
           </div>
 
-          {/* Save to Account button (Always accessible) */}
+          {/* Autosave / Save Status Indicator & Manual Save Button */}
           <button
             onClick={handleSaveResume}
-            disabled={isSavingResume}
+            disabled={saveStatus === 'saving'}
             className={`flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-              saveResumeSuccess
+              saveStatus === 'saved'
                 ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/40'
-                : isLight
-                  ? 'bg-white hover:bg-slate-50 text-purple-700 border border-purple-200 shadow-sm'
-                  : 'bg-[#141740] hover:bg-purple-600/20 text-purple-300 border border-purple-500/30'
+                : saveStatus === 'saving'
+                  ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 animate-pulse'
+                  : saveStatus === 'error'
+                    ? 'bg-red-600/20 text-red-400 border border-red-500/40'
+                    : isLight
+                      ? 'bg-white hover:bg-slate-50 text-purple-700 border border-purple-200 shadow-sm'
+                      : 'bg-[#141740] hover:bg-purple-600/20 text-purple-300 border border-purple-500/30'
             }`}
-            title="Save resume to My Resumes & Dashboard"
+            title="Autosave active. Click to save now."
           >
-            {saveResumeSuccess ? (
+            {saveStatus === 'saving' ? (
+              <>
+                <Loader2 size={13} className="animate-spin text-purple-300" />
+                <span>Saving...</span>
+              </>
+            ) : saveStatus === 'saved' ? (
               <>
                 <Check size={13} className="text-emerald-400" />
-                <span>Saved!</span>
+                <span>Saved ✓</span>
+              </>
+            ) : saveStatus === 'error' ? (
+              <>
+                <AlertCircle size={13} className="text-red-400" />
+                <span>Save failed ⚠</span>
               </>
             ) : (
               <>
                 <Save size={13} />
-                <span>{isSavingResume ? 'Saving...' : 'Save'}</span>
+                <span>Save</span>
               </>
             )}
           </button>
@@ -2579,85 +2664,136 @@ export default function Builder() {
         </div>
       )}
 
-      {/* ── AI Engine Configuration Modal ── */}
-      {isAiConfigOpen && (
+      {/* ── AI Preview Error Toast ── */}
+      {aiPreviewError && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md p-4 rounded-xl shadow-2xl flex items-start gap-3 bg-red-900/90 text-red-200 border border-red-500/40 backdrop-blur-md animate-fade-in">
+          <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 text-xs">
+            <p className="font-semibold text-red-100 mb-0.5">AI Enhancement Notice</p>
+            <p>{aiPreviewError}</p>
+          </div>
+          <button onClick={() => setAiPreviewError(null)} className="text-red-300 hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* ── AI Enhancement Preview Modal (Apply / Cancel / Regenerate) ── */}
+      {aiPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border"
+          <div className="w-full max-w-2xl rounded-2xl p-6 shadow-2xl border flex flex-col max-h-[90vh]"
                style={{ background: isLight ? '#ffffff' : '#0e1136', borderColor: isLight ? '#cbd5e1' : 'rgba(124,58,237,.35)' }}>
             
-            <div className="flex items-center justify-between pb-3 border-b"
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b flex-shrink-0"
                  style={{ borderColor: isLight ? '#e2e8f0' : 'rgba(255,255,255,.1)' }}>
-              <div className="flex items-center gap-2">
-                <Sparkles size={18} className="text-purple-400" />
-                <h3 className="font-bold text-base" style={{ color: isLight ? '#0f172a' : '#f8fafc' }}>
-                  AI Engine Settings
-                </h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base" style={{ color: isLight ? '#0f172a' : '#f8fafc' }}>
+                    AI Enhancement Preview
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Review suggested changes before applying. No metrics or facts are invented.
+                  </p>
+                </div>
               </div>
-              <button onClick={() => setIsAiConfigOpen(false)}
-                      className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer">
+              <button
+                onClick={() => setAiPreview(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer"
+                title="Cancel"
+              >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="py-4 space-y-3">
-              <p className="text-xs text-slate-400 leading-relaxed">
-                ResumeAI Pro includes an intelligent dynamic resume engine. For unlimited real-time completions powered by Google's latest free model, enter your free API key below:
-              </p>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-slate-300">
-                  Google AI Studio Free API Key
-                </label>
-                <input
-                  type="password"
-                  value={aiApiKeyInput}
-                  onChange={(e) => setAiApiKeyInput(e.target.value)}
-                  placeholder="AIzaSy..."
-                  className="form-input text-xs py-2 px-3 bg-[#141842] border-purple-500/30 text-slate-100 rounded-lg w-full font-mono focus:border-purple-400"
-                />
-              </div>
-
-              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs space-y-1.5 text-slate-300">
-                <p className="font-semibold text-purple-300">How to get a 100% Free API Key (30 Seconds):</p>
-                <ol className="list-decimal list-inside text-[11px] text-slate-400 space-y-1">
-                  <li>Visit <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-purple-400 hover:underline font-medium">aistudio.google.com/apikey</a></li>
-                  <li>Sign in with your Google Account</li>
-                  <li>Click <span className="text-white font-medium">"Create API Key"</span> and copy it</li>
-                  <li>Paste it above and click Save (Free 1,500 requests/day, no credit card)</li>
-                </ol>
-              </div>
-
-              {aiKeySavedFeedback && (
-                <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-                  <Check size={14} />
-                  <span>API Key saved successfully! Live AI completions active.</span>
+            {/* Comparison Body */}
+            <div className="py-4 space-y-4 overflow-y-auto flex-1 pr-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Original */}
+                <div className="rounded-xl p-4 flex flex-col"
+                     style={{ background: isLight ? '#f8fafc' : 'rgba(255,255,255,.03)', border: `1px solid ${isLight ? '#e2e8f0' : 'rgba(255,255,255,.08)'}` }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Original</span>
+                    <span className="text-[10px] text-slate-500">Current</span>
+                  </div>
+                  <div className="text-xs text-slate-400 leading-relaxed overflow-y-auto flex-1 font-sans">
+                    {aiPreview.type === 'summary' ? (
+                      <p className="whitespace-pre-wrap">{aiPreview.original || '(No summary entered)'}</p>
+                    ) : (
+                      <ul className="list-disc list-inside space-y-1.5">
+                        {Array.isArray(aiPreview.original) ? (
+                          aiPreview.original.map((b, i) => <li key={i} className="text-slate-400">{b}</li>)
+                        ) : (
+                          <li>{String(aiPreview.original)}</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
                 </div>
-              )}
+
+                {/* Enhanced */}
+                <div className="rounded-xl p-4 flex flex-col"
+                     style={{ background: isLight ? '#f0fdf4' : 'rgba(16,185,129,.05)', border: `1px solid ${isLight ? '#86efac' : 'rgba(16,185,129,.3)'}` }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+                      <Sparkles size={11} /> AI Enhanced
+                    </span>
+                    <span className="text-[10px] text-emerald-400/80 font-medium">Ready to Apply</span>
+                  </div>
+                  <div className="text-xs text-slate-200 leading-relaxed overflow-y-auto flex-1 font-sans"
+                       style={{ color: isLight ? '#14532d' : '#e2e8f0' }}>
+                    {aiPreview.type === 'summary' ? (
+                      <p className="whitespace-pre-wrap font-medium">{aiPreview.enhanced}</p>
+                    ) : (
+                      <ul className="list-disc list-inside space-y-1.5">
+                        {Array.isArray(aiPreview.enhanced) ? (
+                          aiPreview.enhanced.map((b, i) => <li key={i} className="font-medium">{b}</li>)
+                        ) : (
+                          <li>{String(aiPreview.enhanced)}</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t"
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-4 border-t flex-shrink-0"
                  style={{ borderColor: isLight ? '#e2e8f0' : 'rgba(255,255,255,.1)' }}>
               <button
                 type="button"
-                onClick={() => setIsAiConfigOpen(false)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                  isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+                onClick={() => setAiPreview(null)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                  isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-white/5 hover:bg-white/10 text-slate-300'
                 }`}
               >
-                Close
+                Cancel / Keep Original
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStoredGeminiKey(aiApiKeyInput)
-                  setAiKeySavedFeedback(true)
-                  setTimeout(() => setAiKeySavedFeedback(false), 3000)
-                }}
-                className="btn-primary text-xs px-4 py-2 rounded-xl font-semibold shadow-md flex items-center gap-1.5 cursor-pointer"
-              >
-                <Check size={14} />
-                <span>Save API Key</span>
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRegenerateAiPreview}
+                  disabled={isEnhancingSummary || !!enhancingExpId}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 border border-purple-500/30 text-purple-300 hover:bg-purple-500/15 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw size={12} className={isEnhancingSummary || !!enhancingExpId ? 'animate-spin' : ''} />
+                  <span>Regenerate</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleApplyAiPreview}
+                  className="btn-primary text-xs px-4 py-2 rounded-xl font-semibold shadow-lg shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check size={14} />
+                  <span>Apply Changes</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

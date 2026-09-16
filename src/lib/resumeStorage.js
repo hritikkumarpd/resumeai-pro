@@ -1,7 +1,6 @@
 /**
  * Unified Resume Storage Manager for ResumeAI Pro
- * Guarantees zero data loss with instant local persistence
- * + cloud synchronization with Supabase backend.
+ * Guarantees local persistence + cloud sync with proper error reporting.
  */
 import { resumeApi } from './api'
 
@@ -77,7 +76,9 @@ export const resumeStorage = {
   },
 
   /**
-   * Save or update a resume
+   * Save or update a resume.
+   * Returns { id, savedToCloud, error? }
+   * Throws only on complete failure (both local and cloud fail).
    */
   async save(payload, user) {
     const userId = user?.id || 'guest'
@@ -85,21 +86,23 @@ export const resumeStorage = {
     const localResumes = JSON.parse(localStorage.getItem(localKey) || '[]')
     const now = new Date().toISOString()
 
+    const isExistingCloudResume = payload.id && !payload.id.startsWith('res_')
     const resumeId = payload.id || `res_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`
+
     const resumeRecord = {
       id: resumeId,
       user_id: userId,
       title: payload.title || 'My Resume',
       data: payload.data || {},
-      template: payload.template || 'Classic ATS (Jake\'s / Overleaf)',
+      template: payload.template || "Classic ATS (Jake's / Overleaf)",
       accent_color: payload.accent_color || '#000000',
       font: payload.font || 'Times New Roman',
-      ats_score: payload.ats_score != null ? payload.ats_score : 85,
+      ats_score: payload.ats_score != null ? payload.ats_score : null,
       updated_at: now,
       created_at: payload.created_at || now,
     }
 
-    // 1. Immediately save to local storage (instant & guaranteed)
+    // 1. Save to local storage (instant & guaranteed)
     const existingIndex = localResumes.findIndex(r => r.id === resumeId)
     let updatedLocal
     if (existingIndex >= 0) {
@@ -110,27 +113,59 @@ export const resumeStorage = {
     }
     localStorage.setItem(localKey, JSON.stringify(updatedLocal))
 
-    // 2. Also attempt cloud save to Supabase backend
+    // 2. Attempt cloud save to Supabase backend
+    let savedToCloud = false
+    let cloudError = null
+
     if (user?.id) {
       try {
-        if (payload.id && !payload.id.startsWith('res_')) {
-          await resumeApi.update(payload.id, payload)
+        if (isExistingCloudResume) {
+          // Update existing cloud resume
+          const res = await resumeApi.update(payload.id, {
+            title: resumeRecord.title,
+            data: resumeRecord.data,
+            template: resumeRecord.template,
+            accent_color: resumeRecord.accent_color,
+            font: resumeRecord.font,
+            ats_score: resumeRecord.ats_score,
+          })
+          if (res.data) {
+            savedToCloud = true
+            // Update local cache with server response
+            const serverRecord = { ...resumeRecord, ...res.data }
+            const remapped = updatedLocal.map(r => r.id === resumeId ? serverRecord : r)
+            localStorage.setItem(localKey, JSON.stringify(remapped))
+            return { ...serverRecord, savedToCloud: true }
+          }
         } else {
-          const res = await resumeApi.create(payload)
+          // Create new cloud resume
+          const res = await resumeApi.create({
+            title: resumeRecord.title,
+            data: resumeRecord.data,
+            template: resumeRecord.template,
+            accent_color: resumeRecord.accent_color,
+            font: resumeRecord.font,
+          })
           if (res.data?.id) {
+            savedToCloud = true
             const finalId = res.data.id
-            const finalRecord = { ...resumeRecord, id: finalId }
+            const finalRecord = { ...resumeRecord, id: finalId, ...res.data }
             const remapped = updatedLocal.map(r => r.id === resumeId ? finalRecord : r)
             localStorage.setItem(localKey, JSON.stringify(remapped))
-            return finalRecord
+            return { ...finalRecord, savedToCloud: true }
           }
         }
       } catch (err) {
-        console.warn('Cloud sync to Supabase skipped, resume is safely saved in local storage:', err?.message)
+        cloudError = err?.response?.data?.error || err?.message || 'Cloud sync failed'
+        console.warn('Cloud save failed:', cloudError)
       }
     }
 
-    return resumeRecord
+    return {
+      ...resumeRecord,
+      savedToCloud,
+      error: cloudError,
+    }
   },
 
   /**
@@ -156,7 +191,7 @@ export const resumeStorage = {
   },
 
   /**
-   * Rename a resume (e.g. "Data Science Resume", "AIML Resume")
+   * Rename a resume
    */
   async rename(id, newTitle, user) {
     const userId = user?.id || 'guest'

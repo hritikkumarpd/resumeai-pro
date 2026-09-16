@@ -43,11 +43,47 @@ async function requireAuth(req, res, next) {
  */
 function requirePro(req, res, next) {
   const plan = req.profile?.plan
-  if (plan === 'pro' || plan === 'lifetime') return next()
+  if (plan === 'monthly' || plan === 'yearly') return next()
   return res.status(403).json({
-    error: 'This feature requires a Pro or Lifetime plan.',
+    error: 'This feature requires a Pro plan (Monthly or Yearly).',
     upgrade_url: `${process.env.FRONTEND_URL}/pricing`,
   })
 }
 
-module.exports = { requireAuth, requirePro }
+/**
+ * Middleware: optional Supabase JWT verification.
+ * If Authorization header exists and is valid, attaches req.user and req.profile.
+ * If not present or invalid, sets req.user = null and continues without failing.
+ */
+async function optionalAuth(req, res, next) {
+  const authHeader = req.headers.authorization
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    req.user = null
+    req.profile = null
+    return next()
+  }
+
+  const token = authHeader.split(' ')[1]
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
+    if (!error && user) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      req.user = user
+      req.profile = profile || {}
+      req.token = token
+    } else {
+      req.user = null
+      req.profile = null
+    }
+  } catch (_) {
+    req.user = null
+    req.profile = null
+  }
+  next()
+}
+
+module.exports = { requireAuth, requirePro, optionalAuth }

@@ -105,11 +105,34 @@ export const aiApi = {
 
 /* ── Payment (Razorpay Standard Checkout) ───────────────────────── */
 export const paymentApi = {
-  createOrder: (planOrOptions) => {
+  createOrder: async (planOrOptions) => {
     const payload = typeof planOrOptions === 'string' ? { plan: planOrOptions } : planOrOptions
-    return api.post('/create-order', payload)
+    try {
+      return await api.post('/payment/create-order', payload)
+    } catch (err) {
+      if (err.response?.status === 404) {
+        return await api.post('/create-order', payload)
+      }
+      throw err
+    }
   },
-  verify: (data) => api.post('/verify-payment', data),
+  verify: async (data) => {
+    try {
+      return await api.post('/payment/verify-payment', data)
+    } catch (err) {
+      if (err.response?.status === 404) {
+        try {
+          return await api.post('/payment/verify', data)
+        } catch (e2) {
+          if (e2.response?.status === 404) {
+            return await api.post('/verify-payment', data)
+          }
+          throw e2
+        }
+      }
+      throw err
+    }
+  },
 }
 
 /* ── Admin ─────────────────────────────────────────────────────── */

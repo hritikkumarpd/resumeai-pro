@@ -47,9 +47,9 @@ async function handleCreateOrder(req, res) {
       error: 'Razorpay keys not configured on backend. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in Render Environment Variables.',
     })
   }
-
   try {
-    const orderReceipt = receipt || `receipt_${req.user?.id || 'guest'}_${Date.now()}`
+    const userIdShort = (req.user?.id || 'guest').replace(/[^a-zA-Z0-9]/g, '').slice(-8)
+    const orderReceipt = (receipt || `rcpt_${userIdShort}_${Date.now()}`).slice(0, 40)
     const order = await razorpay.orders.create({
       amount:   orderAmount,
       currency: orderCurrency,

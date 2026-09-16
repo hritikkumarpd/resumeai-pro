@@ -56,22 +56,38 @@ const PLANS = {
 }
 
 /**
+ * Plan key aliases for backward compatibility with older deployments
+ */
+const PLAN_ALIASES = {
+  pro_monthly: 'monthly',
+  pro_yearly:  'yearly',
+  lifetime:    'yearly',
+}
+
+function resolvePlanKey(key) {
+  if (!key) return null
+  return PLAN_ALIASES[key] || key
+}
+
+/**
  * Valid paid plan keys (excludes 'free')
  */
-const PAID_PLAN_KEYS = Object.keys(PLANS).filter(k => k !== 'free')
+const PAID_PLAN_KEYS = ['monthly', 'yearly', 'pro_monthly', 'pro_yearly', 'lifetime']
 
 /**
  * Look up plan config by key. Returns null if invalid.
  */
 function getPlan(key) {
-  return PLANS[key] || null
+  const resolved = resolvePlanKey(key)
+  return PLANS[resolved] || null
 }
 
 /**
  * Check if a plan key is a paid (premium) plan.
  */
 function isPaidPlan(planKey) {
-  return planKey === 'monthly' || planKey === 'yearly'
+  const resolved = resolvePlanKey(planKey)
+  return resolved === 'monthly' || resolved === 'yearly'
 }
 
-module.exports = { PLANS, PAID_PLAN_KEYS, getPlan, isPaidPlan }
+module.exports = { PLANS, PAID_PLAN_KEYS, getPlan, isPaidPlan, resolvePlanKey }

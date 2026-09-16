@@ -106,10 +106,21 @@ export const aiApi = {
 /* ── Payment (Razorpay Standard Checkout) ───────────────────────── */
 export const paymentApi = {
   createOrder: async (planOrOptions) => {
-    const payload = typeof planOrOptions === 'string' ? { plan: planOrOptions } : planOrOptions
+    const payload = typeof planOrOptions === 'string' ? { plan: planOrOptions } : { ...planOrOptions }
+    const planKey = payload.plan
+    const legacyPlanMap = {
+      monthly: 'pro_monthly',
+      yearly:  'pro_yearly',
+    }
+
     try {
       return await api.post('/payment/create-order', payload)
     } catch (err) {
+      // If backend is running older code expecting pro_monthly / pro_yearly
+      if (err.response?.status === 400 && (err.response?.data?.error?.includes('pro_monthly') || err.response?.data?.error?.includes('Valid plans'))) {
+        const legacyPlan = legacyPlanMap[planKey] || `pro_${planKey}`
+        return await api.post('/payment/create-order', { ...payload, plan: legacyPlan })
+      }
       if (err.response?.status === 404) {
         return await api.post('/create-order', payload)
       }

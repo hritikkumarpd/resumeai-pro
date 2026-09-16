@@ -38,6 +38,16 @@ async function handleCreateOrder(req, res) {
     return res.status(400).json({ error: 'Amount must be at least 100 paise (₹1).' })
   }
 
+  // Pre-flight check: Ensure Razorpay credentials are set in environment
+  const keyId = process.env.RAZORPAY_KEY_ID
+  const keySecret = process.env.RAZORPAY_KEY_SECRET
+  if (!keyId || !keySecret || keyId.includes('placeholder') || keySecret.includes('placeholder')) {
+    console.error('Razorpay credentials missing or placeholder on server!')
+    return res.status(500).json({
+      error: 'Razorpay keys not configured on backend. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in Render Environment Variables.',
+    })
+  }
+
   try {
     const orderReceipt = receipt || `receipt_${req.user?.id || 'guest'}_${Date.now()}`
     const order = await razorpay.orders.create({
@@ -61,10 +71,10 @@ async function handleCreateOrder(req, res) {
     console.error('Razorpay create order error:', err)
 
     if (err.statusCode === 401) {
-      return res.status(401).json({ error: 'Razorpay authentication failed. Check API credentials.' })
+      return res.status(401).json({ error: 'Razorpay authentication failed. Check API credentials on Render.' })
     }
 
-    res.status(500).json({ error: err.error?.description || 'Failed to create payment order. Please try again.' })
+    res.status(500).json({ error: err.error?.description || err.message || 'Failed to create payment order. Please try again.' })
   }
 }
 

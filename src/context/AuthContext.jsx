@@ -133,7 +133,18 @@ export function AuthProvider({ children }) {
   }
 
   const forgotPassword = async (email) => {
-    await authApi.forgotPassword({ email })
+    const redirectTo = `${window.location.origin}/reset-password`
+    try {
+      // 1. Direct Supabase client call using exact browser origin
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      })
+      if (error) throw error
+    } catch (clientErr) {
+      console.warn('Direct Supabase resetPasswordForEmail fallback to backend:', clientErr?.message)
+      // 2. Fallback to backend API passing explicit redirectTo
+      await authApi.forgotPassword({ email, redirectTo })
+    }
   }
 
   const updateProfile = async (updates) => {

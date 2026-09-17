@@ -117,12 +117,33 @@ router.put('/me', requireAuth, async (req, res) => {
 
 /* ── POST /api/auth/forgot-password ─────────────────────────── */
 router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body
+  const { email, redirectTo } = req.body
   if (!email) return res.status(400).json({ error: 'Email is required.' })
 
-  const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.FRONTEND_URL}/reset-password`,
-  })
+  // Safely resolve the frontend URL so it NEVER produces "undefined/reset-password"
+  let targetUrl = (typeof redirectTo === 'string' && redirectTo.startsWith('http')) ? redirectTo : null
+
+  if (!targetUrl) {
+    const rawOrigin = process.env.FRONTEND_URL || req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : null) || 'https://resumeaihritik.vercel.app'
+    const cleanOrigin = String(rawOrigin).replace(/\/+$/, '')
+    targetUrl = `${cleanOrigin}/reset-password`
+  }
+
+  // Guard against any leftover string 'undefined'
+  if (targetUrl.includes('undefined') || !targetUrl.startsWith('http')) {
+    targetUrl = 'https://resumeaihritik.vercel.app/reset-password'
+  }
+
+  try {
+    const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+      redirectTo: targetUrl,
+    })
+    if (error) {
+      console.warn('Supabase resetPasswordForEmail warning:', error.message)
+    }
+  } catch (err) {
+    console.error('Password reset email dispatch error:', err.message)
+  }
 
   // Always return success to prevent user enumeration
   res.json({ message: 'If this email exists, a password reset link has been sent.' })

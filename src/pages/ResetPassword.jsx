@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { KeyRound, CheckCircle2, AlertCircle, RefreshCw, ArrowRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -10,6 +10,29 @@ export default function ResetPassword() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    // Handle PKCE code in query parameters
+    const searchParams = new URLSearchParams(window.location.search)
+    const code = searchParams.get('code')
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).catch(console.warn)
+    }
+
+    // Handle token in URL hash
+    const hash = window.location.hash
+    if (hash && hash.includes('access_token')) {
+      const hashParams = new URLSearchParams(hash.replace(/^#/, ''))
+      const accessToken = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token')
+      if (accessToken) {
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || '',
+        }).catch(console.warn)
+      }
+    }
+  }, [])
 
   const handleReset = async (e) => {
     e.preventDefault()

@@ -193,8 +193,6 @@ async function handleVerifyPayment(req, res) {
       // 4c. Update user profile with subscription
       const { error: profileErr } = await supabaseAdmin.from('profiles').update({
         plan:                resolvedPlan,
-        subscription_status: 'active',
-        subscription_end:    expiresAt.toISOString(),
         updated_at:          now.toISOString(),
       }).eq('id', req.user.id)
       if (profileErr) console.warn('Profile update failed:', profileErr.message)
@@ -309,8 +307,6 @@ router.post('/webhook', async (req, res) => {
 
         const { error: whProfileErr } = await supabaseAdmin.from('profiles').update({
           plan:                resolvedWebhookPlan,
-          subscription_status: 'active',
-          subscription_end:    expiresAt.toISOString(),
           updated_at:          now.toISOString(),
         }).eq('id', userId)
         if (whProfileErr) console.error('Webhook profile update error:', whProfileErr)

@@ -49,7 +49,9 @@ async function handleCreateOrder(req, res) {
   }
   try {
     const userIdShort = (req.user?.id || 'guest').replace(/[^a-zA-Z0-9]/g, '').slice(-8)
-    const orderReceipt = (receipt || `rcpt_${userIdShort}_${Date.now()}`).slice(0, 40)
+    const ts = Date.now().toString(36)  // base36 timestamp = 8 chars max
+    const rawReceipt = receipt || `rcpt_${userIdShort}_${ts}`
+    const orderReceipt = rawReceipt.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40)
     const order = await razorpay.orders.create({
       amount:   orderAmount,
       currency: orderCurrency,

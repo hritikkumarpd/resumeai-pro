@@ -98,6 +98,14 @@ export const pdfApi = {
       responseType: 'blob',
       timeout: 60000,  // PDF generation can take up to 60s
     }),
+  /** Render client-side HTML into a vector PDF via backend Puppeteer (auto-attaches JWT) */
+  renderHtml: (html, name) =>
+    api.post('/pdf/render-html', { html, name }, {
+      responseType: 'blob',
+      timeout: 60000,
+    }),
+  /** Get current month's export usage for the authenticated user */
+  quota: () => api.get('/pdf/quota'),
 }
 
 /* ── AI ──────────────────────────────────────────────────────────── */

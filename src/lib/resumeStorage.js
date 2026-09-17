@@ -216,5 +216,46 @@ export const resumeStorage = {
     }
 
     return updated.find(r => r.id === id)
+  },
+
+  /**
+   * Synchronous local-only save for beforeunload flush.
+   * No async cloud calls — guarantees localStorage persistence
+   * even when the browser is shutting down.
+   */
+  saveLocal(payload, user) {
+    const userId = user?.id || 'guest'
+    const localKey = getStorageKey(userId)
+    const now = new Date().toISOString()
+
+    try {
+      const localResumes = JSON.parse(localStorage.getItem(localKey) || '[]')
+      const resumeId = payload.id || `res_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`
+
+      const resumeRecord = {
+        id: resumeId,
+        user_id: userId,
+        title: payload.title || 'My Resume',
+        data: payload.data || {},
+        template: payload.template || "Classic ATS (Jake's / Overleaf)",
+        accent_color: payload.accent_color || '#000000',
+        font: payload.font || 'Times New Roman',
+        ats_score: payload.ats_score != null ? payload.ats_score : null,
+        updated_at: now,
+        created_at: payload.created_at || now,
+      }
+
+      const existingIndex = localResumes.findIndex(r => r.id === resumeId)
+      if (existingIndex >= 0) {
+        localResumes[existingIndex] = { ...localResumes[existingIndex], ...resumeRecord }
+      } else {
+        localResumes.unshift(resumeRecord)
+      }
+      localStorage.setItem(localKey, JSON.stringify(localResumes))
+      return resumeRecord
+    } catch (err) {
+      console.error('saveLocal failed:', err)
+      return null
+    }
   }
 }

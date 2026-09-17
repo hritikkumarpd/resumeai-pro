@@ -1,7 +1,11 @@
 const router = require('express').Router()
 const { requireAuth } = require('../middleware/requireAuth')
+const { supabaseAdmin } = require('../lib/supabase')
+const { isPaidPlan } = require('../config/plans')
 
 const fs = require('fs')
+
+const FREE_EXPORT_LIMIT = 3
 
 function getChromeExecutablePath() {
   if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
@@ -23,11 +27,86 @@ function getChromeExecutablePath() {
   return undefined
 }
 
+/* ── Quota helpers (atomic Supabase RPC) ───────────────────────── */
+
+/**
+ * Check + atomically increment the free-plan user's monthly export count.
+ * Returns { allowed, used, limit, month } or null if user is paid/error.
+ */
+async function checkAndIncrementQuota(userId) {
+  try {
+    const { data, error } = await supabaseAdmin.rpc('increment_export_usage', {
+      p_user_id: userId,
+      p_limit: FREE_EXPORT_LIMIT,
+    })
+    if (error) {
+      console.error('increment_export_usage RPC error:', error.message)
+      return null // fail-open: allow export if RPC fails
+    }
+    return data
+  } catch (err) {
+    console.error('Quota check failed:', err.message)
+    return null // fail-open
+  }
+}
+
+/**
+ * Read current monthly usage without incrementing.
+ */
+async function getQuota(userId) {
+  try {
+    const { data, error } = await supabaseAdmin.rpc('get_export_usage', {
+      p_user_id: userId,
+    })
+    if (error) {
+      console.error('get_export_usage RPC error:', error.message)
+      return { used: 0, limit: FREE_EXPORT_LIMIT, month: null }
+    }
+    return data
+  } catch (err) {
+    console.error('Quota read failed:', err.message)
+    return { used: 0, limit: FREE_EXPORT_LIMIT, month: null }
+  }
+}
+
+/**
+ * Calculate when the current month's quota resets (1st of next month, 00:00 UTC).
+ */
+function getQuotaResetDate() {
+  const now = new Date()
+  const resetDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+  return resetDate.toISOString()
+}
+
+/* ── GET /api/pdf/quota — Read current export usage ────────────── */
+router.get('/quota', requireAuth, async (req, res) => {
+  const userPlan = req.profile?.plan || 'free'
+  if (isPaidPlan(userPlan)) {
+    return res.json({
+      plan: userPlan,
+      unlimited: true,
+      used: 0,
+      limit: Infinity,
+    })
+  }
+
+  const quota = await getQuota(req.user.id)
+  res.json({
+    plan: 'free',
+    unlimited: false,
+    used: quota.used || 0,
+    limit: quota.limit || FREE_EXPORT_LIMIT,
+    month: quota.month,
+    resets_at: getQuotaResetDate(),
+  })
+})
+
 /* ── POST /api/pdf/render-html (Direct Vector PDF from Client HTML) ── */
 /**
  * Renders raw HTML sent from frontend into a 100% vector, selectable PDF
  * with fully active clickable hyperlinks using headless Puppeteer Chrome.
  * Protected by requireAuth to prevent unauthorized access and DoS.
+ * Free-plan users are limited to FREE_EXPORT_LIMIT exports per calendar month.
  */
 router.post('/render-html', requireAuth, async (req, res) => {
   const { html, name = 'Resume' } = req.body
@@ -39,6 +118,23 @@ router.post('/render-html', requireAuth, async (req, res) => {
   // Prevent payload explosion DoS
   if (html.length > 2 * 1024 * 1024) {
     return res.status(400).json({ error: 'Resume HTML exceeds maximum allowed size (2MB).' })
+  }
+
+  // ── Quota: PRE-CHECK for free-plan users (read-only, no increment yet) ──
+  const userPlan = req.profile?.plan || 'free'
+  const isFreeUser = !isPaidPlan(userPlan)
+  if (isFreeUser) {
+    const currentUsage = await getQuota(req.user.id)
+    if (currentUsage && currentUsage.used >= FREE_EXPORT_LIMIT) {
+      return res.status(429).json({
+        error: `Monthly export limit reached (${currentUsage.used}/${currentUsage.limit}). Upgrade to Pro for unlimited exports.`,
+        used: currentUsage.used,
+        limit: currentUsage.limit,
+        month: currentUsage.month,
+        resets_at: getQuotaResetDate(),
+        upgrade_url: `${(process.env.FRONTEND_URL || 'https://resumeaihritik.vercel.app').replace(/\/+$/, '')}/pricing`,
+      })
+    }
   }
 
   let browser = null
@@ -93,6 +189,18 @@ router.post('/render-html', requireAuth, async (req, res) => {
     await browser.close()
     browser = null
 
+    // ── Quota: INCREMENT only AFTER successful PDF generation ──
+    // This prevents consuming a quota slot when Puppeteer crashes/times out
+    if (isFreeUser) {
+      const quotaResult = await checkAndIncrementQuota(req.user.id)
+      // If a concurrent request snuck in and exhausted the quota between
+      // our pre-check and this increment, the RPC will roll back the increment
+      // and return allowed=false. But the PDF was already generated, so we
+      // still serve it this time (the next request will be blocked).
+      // This is a deliberate fail-open for the current request to avoid
+      // generating a PDF and then throwing it away.
+    }
+
     const safeName = (name || 'Resume').replace(/[^a-zA-Z0-9_-]/g, '_')
     res.set({
       'Content-Type': 'application/pdf',
@@ -110,12 +218,30 @@ router.post('/render-html', requireAuth, async (req, res) => {
 /* ── POST /api/pdf/generate ─────────────────────────────────── */
 /**
  * Generates a PDF from resume data using Puppeteer.
+ * Free-plan users are limited to FREE_EXPORT_LIMIT exports per calendar month.
  */
 router.post('/generate', requireAuth, async (req, res) => {
   const { resumeData, accentColor = '#7C3AED', font = 'Inter' } = req.body
 
   if (!resumeData || !resumeData.personal) {
     return res.status(400).json({ error: 'Resume data with personal info is required.' })
+  }
+
+  // ── Quota: PRE-CHECK for free-plan users (read-only, no increment yet) ──
+  const userPlan = req.profile?.plan || 'free'
+  const isFreeUser = !isPaidPlan(userPlan)
+  if (isFreeUser) {
+    const currentUsage = await getQuota(req.user.id)
+    if (currentUsage && currentUsage.used >= FREE_EXPORT_LIMIT) {
+      return res.status(429).json({
+        error: `Monthly export limit reached (${currentUsage.used}/${currentUsage.limit}). Upgrade to Pro for unlimited exports.`,
+        used: currentUsage.used,
+        limit: currentUsage.limit,
+        month: currentUsage.month,
+        resets_at: getQuotaResetDate(),
+        upgrade_url: `${(process.env.FRONTEND_URL || 'https://resumeaihritik.vercel.app').replace(/\/+$/, '')}/pricing`,
+      })
+    }
   }
 
   // Build HTML for the resume with active hyperlinks
@@ -161,6 +287,11 @@ router.post('/generate', requireAuth, async (req, res) => {
 
     await browser.close()
     browser = null
+
+    // ── Quota: INCREMENT only AFTER successful PDF generation ──
+    if (isFreeUser) {
+      await checkAndIncrementQuota(req.user.id)
+    }
 
     const name = (resumeData.personal?.name || 'Resume').replace(/[^a-zA-Z0-9]/g, '_')
     res.set({

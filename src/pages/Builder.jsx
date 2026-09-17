@@ -6,7 +6,7 @@ import {
   ZoomIn, ZoomOut, Maximize2, Columns, Edit3, CheckCircle2, Sparkles,
   ArrowUp, ArrowDown, Camera, X, Settings2, Check, Sun, Moon,
   Sliders, RotateCcw, RotateCw, SunDim, Contrast, Save, FileText, Edit2,
-  AlertCircle, Loader2, RefreshCw
+  AlertCircle, Loader2, RefreshCw, Shield
 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
@@ -15,8 +15,9 @@ import {
   enhanceBulletsWithAI,
   enhanceSectionWithAI,
 } from '../lib/aiService'
-import { resumeApi } from '../lib/api'
+import { resumeApi, pdfApi } from '../lib/api'
 import { resumeStorage } from '../lib/resumeStorage'
+import { useScreenshotProtection } from '../hooks/useScreenshotProtection'
 
 /* ── Default resume data (Hritik Kumar — TMSL Kolkata, CSE AI & ML) ── */
 const defaultData = {
@@ -1097,6 +1098,8 @@ export default function Builder() {
   const saveVersionRef = useRef(0) // race-condition guard
   const autosaveTimerRef = useRef(null)
   const lastSavedDataRef = useRef(null)
+  const isInitializingRef = useRef(true) // Suppresses autosave during initial data load
+  const lastSavedMetaRef = useRef(null) // Tracks template/accent/font for autosave
   
   // AI State (Preview-based flow — no user API keys)
   const [isEnhancingSummary, setIsEnhancingSummary] = useState(false)
@@ -1107,6 +1110,10 @@ export default function Builder() {
 
   // PDF Export State
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+
+  // Export Quota State (free plan: 3/month)
+  const [exportQuota, setExportQuota] = useState({ used: 0, limit: 3, unlimited: false })
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   // Photo Adjustment & Account Saving State
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false)
@@ -1121,7 +1128,24 @@ export default function Builder() {
   const [photoSavedToast, setPhotoSavedToast] = useState(false)
 
   const previewContainerRef = useRef(null)
+  const previewResumeRef = useRef(null) // For screenshot protection targeting
   const fileInputRef = useRef(null)
+
+  // Screenshot protection — disabled during PDF export
+  const { overlayVisible, protectionClass } = useScreenshotProtection({
+    enabled: !isGeneratingPdf,
+    targetRef: previewResumeRef,
+  })
+
+  // Fetch export quota on mount (for free-plan users)
+  useEffect(() => {
+    if (!user) return
+    pdfApi.quota().then(res => {
+      if (res.data) setExportQuota(res.data)
+    }).catch(() => {
+      // Fail silently — quota display is non-critical
+    })
+  }, [user])
 
   // Auto-populate logged in user defaults & saved photo into resume builder
   useEffect(() => {
@@ -1182,12 +1206,20 @@ export default function Builder() {
 
   // Handle loading resume from resumeStorage when ?id=... is present in URL
   useEffect(() => {
-    if (!resumeIdFromUrl) return
+    if (!resumeIdFromUrl) {
+      // No resume to load — mark initialization complete after a short delay
+      // (allows user defaults effect to run first)
+      const timer = setTimeout(() => { isInitializingRef.current = false }, 500)
+      return () => clearTimeout(timer)
+    }
     let isMounted = true
     const loadResume = async () => {
       try {
         const r = await resumeStorage.get(resumeIdFromUrl, user)
-        if (!isMounted || !r) return
+        if (!isMounted || !r) {
+          isInitializingRef.current = false
+          return
+        }
         if (r.title) setResumeTitle(r.title)
         if (r.template && TEMPLATES.includes(r.template)) setTemplate(r.template)
         if (r.accent_color) setAccent(r.accent_color)
@@ -1201,10 +1233,19 @@ export default function Builder() {
               ...(r.data.personal || {})
             }
           }))
+          // Snapshot loaded data so autosave diff check works correctly
+          lastSavedDataRef.current = JSON.stringify(r.data)
         }
         setCurrentResumeId(r.id)
+        // Snapshot meta state
+        lastSavedMetaRef.current = JSON.stringify({
+          template: r.template, accent: r.accent_color, font: r.font, title: r.title
+        })
       } catch (err) {
         console.error('Failed to load resume by ID:', err)
+      } finally {
+        // Mark initialization complete — autosave can now fire
+        setTimeout(() => { isInitializingRef.current = false }, 300)
       }
     }
     loadResume()
@@ -1233,6 +1274,7 @@ export default function Builder() {
 
       if (saved?.id) setCurrentResumeId(saved.id)
       lastSavedDataRef.current = JSON.stringify(dataToSave)
+      lastSavedMetaRef.current = JSON.stringify({ template, accent, font, title: resumeTitle })
       setSaveStatus('saved')
       setTimeout(() => {
         if (saveVersionRef.current === version) setSaveStatus('idle')
@@ -1247,21 +1289,47 @@ export default function Builder() {
     }
   }, [currentResumeId, resumeTitle, template, accent, font, user])
 
-  // Debounced autosave: triggers 1s after last edit
+  // Debounced autosave: triggers 2s after last edit (data + meta changes)
   useEffect(() => {
-    // Skip autosave if data hasn't actually changed
+    // Skip autosave during initialization phase (loading from URL/Supabase)
+    if (isInitializingRef.current) return
+
+    // Skip autosave if neither data nor meta (template/accent/font/title) changed
     const serialized = JSON.stringify(data)
-    if (serialized === lastSavedDataRef.current) return
+    const metaSerialized = JSON.stringify({ template, accent, font, title: resumeTitle })
+    if (serialized === lastSavedDataRef.current && metaSerialized === lastSavedMetaRef.current) return
 
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(() => {
       executeSave(data)
-    }, 1000)
+    }, 2000)
 
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     }
-  }, [data, executeSave])
+  }, [data, template, accent, font, resumeTitle, executeSave])
+
+  // beforeunload: flush pending save to localStorage to prevent data loss
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Only flush if there are unsaved changes
+      const serialized = JSON.stringify(data)
+      if (serialized !== lastSavedDataRef.current) {
+        // Synchronous local-only save (no async cloud calls during unload)
+        resumeStorage.saveLocal({
+          id: currentResumeId,
+          title: resumeTitle,
+          data: data,
+          template,
+          accent_color: accent,
+          font,
+          ats_score: calcScore(data),
+        }, user)
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [data, currentResumeId, resumeTitle, template, accent, font, user])
 
   // Manual save handler (for the Save button)
   const handleSaveResume = () => {
@@ -1523,6 +1591,14 @@ export default function Builder() {
       return
     }
 
+    // ── Quota check for free-plan users ──
+    if (!exportQuota.unlimited) {
+      if (exportQuota.used >= exportQuota.limit) {
+        setShowUpgradeModal(true)
+        return
+      }
+    }
+
     setIsGeneratingPdf(true)
 
     try {
@@ -1583,6 +1659,12 @@ export default function Builder() {
       transform: none !important;
       box-sizing: border-box !important;
     }
+    /* Remove screenshot protection styles from PDF */
+    .resume-capture-protected {
+      user-select: auto !important;
+      -webkit-user-select: auto !important;
+      -webkit-user-drag: auto !important;
+    }
     a {
       color: inherit;
       text-decoration: none;
@@ -1600,48 +1682,49 @@ export default function Builder() {
 </body>
 </html>`
 
-      // 1. Try Direct Vector PDF via Backend Puppeteer (100% Selectable Text & Active Clickable Links)
-      const endpoints = [
-        '/api/pdf/render-html',
-        'http://localhost:4000/api/pdf/render-html',
-      ]
-      if (import.meta.env.VITE_API_URL) {
-        const rawBase = String(import.meta.env.VITE_API_URL).replace(/\/+$/, '')
-        const pdfUrl = rawBase.endsWith('/api') ? `${rawBase}/pdf/render-html` : `${rawBase}/api/pdf/render-html`
-        endpoints.unshift(pdfUrl)
+      // 1. Try Direct Vector PDF via Backend Puppeteer with JWT auth (auto-attached by Axios)
+      let backendSuccess = false
+      try {
+        const response = await pdfApi.renderHtml(
+          fullHtml,
+          resumeTitle || data.personal.name || 'Resume'
+        )
+
+        if (response.data && response.data.size > 2000) {
+          const url = window.URL.createObjectURL(response.data)
+          const a = document.createElement('a')
+          const safeName = (resumeTitle || data.personal.name || 'Resume').replace(/[^a-zA-Z0-9_-]/g, '_')
+          a.href = url
+          a.download = `${safeName}.pdf`
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          window.URL.revokeObjectURL(url)
+          backendSuccess = true
+        }
+      } catch (apiErr) {
+        // Handle quota exceeded (429)
+        if (apiErr.response?.status === 429) {
+          setIsGeneratingPdf(false)
+          const errData = apiErr.response.data
+          setExportQuota(prev => ({
+            ...prev,
+            used: errData.used || prev.used,
+            limit: errData.limit || prev.limit,
+          }))
+          setShowUpgradeModal(true)
+          return
+        }
+        console.warn('Backend vector PDF failed, trying browser fallback:', apiErr?.message)
       }
 
-      for (const endpoint of endpoints) {
-        try {
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              html: fullHtml,
-              name: resumeTitle || data.personal.name || 'Resume'
-            })
-          })
-
-          const contentType = response.headers.get('content-type') || ''
-          if (response.ok && (contentType.includes('application/pdf') || response.status === 200)) {
-            const blob = await response.blob()
-            if (blob.size > 2000) {
-              const url = window.URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              const safeName = (resumeTitle || data.personal.name || 'Resume').replace(/[^a-zA-Z0-9_-]/g, '_')
-              a.href = url
-              a.download = `${safeName}.pdf`
-              document.body.appendChild(a)
-              a.click()
-              document.body.removeChild(a)
-              window.URL.revokeObjectURL(url)
-              setIsGeneratingPdf(false)
-              return
-            }
-          }
-        } catch (apiErr) {
-          console.warn(`Backend vector PDF download error via ${endpoint}, trying fallback:`, apiErr?.message)
+      if (backendSuccess) {
+        setIsGeneratingPdf(false)
+        // Update quota count after successful export
+        if (!exportQuota.unlimited) {
+          setExportQuota(prev => ({ ...prev, used: prev.used + 1 }))
         }
+        return
       }
 
       // 2. Fallback: In-Viewport Vector Browser Print
@@ -1669,6 +1752,10 @@ export default function Builder() {
 
       const triggerPrint = () => {
         setIsGeneratingPdf(false)
+        // Update quota for browser print fallback too
+        if (!exportQuota.unlimited) {
+          setExportQuota(prev => ({ ...prev, used: prev.used + 1 }))
+        }
         iframe.contentWindow.focus()
         iframe.contentWindow.print()
       }
@@ -1961,6 +2048,20 @@ export default function Builder() {
               </>
             )}
           </button>
+
+          {/* Free-plan export quota badge */}
+          {user && !exportQuota.unlimited && (
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full select-none whitespace-nowrap ${
+              exportQuota.used >= exportQuota.limit
+                ? (isLight ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-red-500/15 text-red-400 border border-red-500/25')
+                : (isLight ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-slate-700/50 text-slate-400 border border-slate-600/40')
+            }`}>
+              {exportQuota.used >= exportQuota.limit
+                ? `${exportQuota.limit}/${exportQuota.limit} used`
+                : `${exportQuota.limit - exportQuota.used} export${exportQuota.limit - exportQuota.used !== 1 ? 's' : ''} left`
+              }
+            </span>
+          )}
         </div>
       </header>
 
@@ -2406,15 +2507,22 @@ export default function Builder() {
                   minHeight: Math.round(A4_HEIGHT_PX * (zoom / 100)),
                   position: 'relative'
                 }}>
-                  <div style={{
-                    width: `${A4_WIDTH_PX}px`,
-                    minHeight: `${A4_HEIGHT_PX}px`,
-                    transform: `scale(${zoom / 100})`,
-                    transformOrigin: 'top left',
-                    boxShadow: isLight
-                      ? '0 12px 36px -4px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.08)'
-                      : '0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.12)'
-                  }}>
+                  <div
+                    ref={previewResumeRef}
+                    className={protectionClass}
+                    style={{
+                      width: `${A4_WIDTH_PX}px`,
+                      minHeight: `${A4_HEIGHT_PX}px`,
+                      transform: `scale(${zoom / 100})`,
+                      transformOrigin: 'top left',
+                      boxShadow: isLight
+                        ? '0 12px 36px -4px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.08)'
+                        : '0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.12)',
+                      userSelect: protectionClass ? 'none' : 'auto',
+                      WebkitUserSelect: protectionClass ? 'none' : 'auto',
+                      WebkitUserDrag: protectionClass ? 'none' : 'auto',
+                    }}
+                  >
                     <ResumeDoc
                       data={data}
                       accent={accent}
@@ -2851,6 +2959,69 @@ export default function Builder() {
         </div>
       )}
 
+      {/* ── Screenshot Protection Black Overlay ── */}
+      {overlayVisible && (
+        <div
+          className="fixed inset-0 z-[99999] bg-black flex items-center justify-center"
+          style={{ cursor: 'not-allowed' }}
+        >
+          <div className="text-center">
+            <Shield size={48} className="text-white/30 mx-auto mb-3" />
+            <p className="text-white/50 text-sm font-medium">Resume content is protected</p>
+            <p className="text-white/30 text-xs mt-1">Return to the tab to continue editing</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Upgrade Modal (Export Quota Exhausted) ── */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+             onClick={() => setShowUpgradeModal(false)}>
+          <div className={`w-full max-w-md rounded-2xl p-6 shadow-2xl border ${
+            isLight ? 'bg-white border-slate-200' : 'bg-[#0e1136] border-purple-500/30'
+          }`}
+               onClick={e => e.stopPropagation()}>
+            <div className="text-center">
+              <div className={`inline-flex items-center justify-center w-14 h-14 rounded-full mb-4 ${
+                isLight ? 'bg-orange-100' : 'bg-orange-500/15'
+              }`}>
+                <AlertCircle size={28} className="text-orange-500" />
+              </div>
+              <h3 className={`text-lg font-bold mb-2 ${
+                isLight ? 'text-slate-900' : 'text-white'
+              }`}>Monthly Export Limit Reached</h3>
+              <p className={`text-sm mb-1 ${
+                isLight ? 'text-slate-600' : 'text-slate-400'
+              }`}>
+                You've used all <strong>{exportQuota.limit}</strong> free exports this month.
+              </p>
+              <p className={`text-xs mb-5 ${
+                isLight ? 'text-slate-500' : 'text-slate-500'
+              }`}>
+                Your limit resets at the start of next month (UTC).
+              </p>
+              <div className="flex flex-col gap-2.5">
+                <Link
+                  to="/pricing"
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-lg shadow-purple-600/25 transition-all"
+                >
+                  <Zap size={15} />
+                  Upgrade to Pro — Unlimited Exports
+                </Link>
+                <button
+                  onClick={() => setShowUpgradeModal(false)}
+                  className={`w-full px-4 py-2 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
+                    isLight ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-400 hover:bg-white/5'
+                  }`}
+                >
+                  Maybe Later
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Native Fallback Print Stylesheet ── */}
       <style>{`
         @media print {
@@ -2880,6 +3051,11 @@ export default function Builder() {
           }
           #printable-resume, #printable-resume * {
             visibility: visible !important;
+          }
+          .resume-capture-protected {
+            user-select: auto !important;
+            -webkit-user-select: auto !important;
+            -webkit-user-drag: auto !important;
           }
           #printable-resume {
             position: absolute !important;

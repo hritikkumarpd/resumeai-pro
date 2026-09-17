@@ -6,7 +6,7 @@ const crypto = require('crypto')
  */
 function requireAdmin(req, res, next) {
   const adminSecret = process.env.ADMIN_SECRET
-  if (!adminSecret || adminSecret === 'your-super-secret-admin-key-change-this' && process.env.NODE_ENV === 'production') {
+  if (!adminSecret || (adminSecret === 'your-super-secret-admin-key-change-this' && process.env.NODE_ENV === 'production')) {
     console.error('ADMIN_SECRET is not securely configured on server')
     return res.status(500).json({ error: 'Admin access is disabled. Please configure a secure ADMIN_SECRET in server/.env.' })
   }

@@ -1,6 +1,7 @@
 const router = require('express').Router()
 const { supabaseAdmin } = require('../lib/supabase')
 const { requireAuth } = require('../middleware/requireAuth')
+const { isPaidPlan } = require('../config/plans')
 
 const FREE_PLAN_LIMIT = 3  // max resumes on free plan
 
@@ -19,7 +20,7 @@ router.get('/', requireAuth, async (req, res) => {
 /* ── POST /api/resumes ──────────────────────────────────────── */
 router.post('/', requireAuth, async (req, res) => {
   // Enforce free plan limit
-  if (req.profile?.plan === 'free') {
+  if (!isPaidPlan(req.profile?.plan)) {
     const { count } = await supabaseAdmin
       .from('resumes')
       .select('*', { count: 'exact', head: true })
@@ -125,7 +126,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 /* ── POST /api/resumes/:id/duplicate ───────────────────────── */
 router.post('/:id/duplicate', requireAuth, async (req, res) => {
   // Enforce free plan limit on duplicate
-  if (req.profile?.plan === 'free') {
+  if (!isPaidPlan(req.profile?.plan)) {
     const { count } = await supabaseAdmin
       .from('resumes')
       .select('*', { count: 'exact', head: true })

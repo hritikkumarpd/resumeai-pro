@@ -101,8 +101,8 @@ router.get('/users', requireAdmin, async (req, res) => {
 /* ── PUT /api/admin/users/:id/plan ──────────────────────────── */
 router.put('/users/:id/plan', requireAdmin, async (req, res) => {
   const { plan } = req.body
-  if (!['free','pro','lifetime'].includes(plan)) {
-    return res.status(400).json({ error: 'Plan must be one of: free, pro, lifetime' })
+  if (!['free','monthly','yearly'].includes(plan)) {
+    return res.status(400).json({ error: 'Plan must be one of: free, monthly, yearly' })
   }
 
   const { data, error } = await supabaseAdmin

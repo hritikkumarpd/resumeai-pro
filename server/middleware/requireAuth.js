@@ -1,4 +1,5 @@
 const { supabaseAdmin } = require('../lib/supabase')
+const { isPaidPlan } = require('../config/plans')
 
 /**
  * Middleware: verify Supabase JWT from Authorization header.
@@ -43,7 +44,7 @@ async function requireAuth(req, res, next) {
  */
 function requirePro(req, res, next) {
   const plan = req.profile?.plan
-  if (plan === 'monthly' || plan === 'yearly') return next()
+  if (isPaidPlan(plan)) return next()
   return res.status(403).json({
     error: 'This feature requires a Pro plan (Monthly or Yearly).',
     upgrade_url: `${process.env.FRONTEND_URL}/pricing`,

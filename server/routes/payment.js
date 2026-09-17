@@ -4,7 +4,7 @@ const { requireAuth, optionalAuth } = require('../middleware/requireAuth')
 const { razorpay } = require('../lib/razorpay')
 const { supabaseAdmin } = require('../lib/supabase')
 const { sendSubscriptionEmail } = require('../lib/mailer')
-const { PLANS, getPlan, isPaidPlan } = require('../config/plans')
+const { PLANS, getPlan, isPaidPlan, resolvePlanKey } = require('../config/plans')
 
 /* ── POST /api/payment/create-order ────────────────────────── */
 async function handleCreateOrder(req, res) {
@@ -137,73 +137,90 @@ async function handleVerifyPayment(req, res) {
       if (existingPayment) {
         return res.status(409).json({ success: false, error: 'This payment has already been verified and processed.' })
       }
-    } catch (_) {}
+    } catch (replayErr) {
+      console.warn('Anti-replay check failed (table may not exist yet):', replayErr?.message)
+      // Non-fatal: continue with verification — table may not be created yet
+    }
   }
 
   // 3. Security: Fetch order details directly from Razorpay if plan is specified
-  let verifiedPlanKey = plan
+  //    Resolve aliases (pro_monthly -> monthly) before anything else
+  let verifiedPlanKey = resolvePlanKey(plan) || plan
   let orderAmount = 0
   if (verifiedPlanKey) {
     try {
       const rzpOrder = await razorpay.orders.fetch(orderId)
       if (rzpOrder) {
-        const trustedPlanKey = rzpOrder.notes?.plan || plan
+        const trustedPlanKey = resolvePlanKey(rzpOrder.notes?.plan) || resolvePlanKey(plan) || plan
         const trustedPlan = getPlan(trustedPlanKey)
         if (trustedPlan && isPaidPlan(trustedPlanKey)) {
           verifiedPlanKey = trustedPlanKey
           orderAmount = rzpOrder.amount
         }
       }
-    } catch (_) {}
+    } catch (rzpErr) {
+      console.warn('Razorpay order fetch failed (using client-supplied plan):', rzpErr?.message)
+      // Non-fatal: fall back to client-supplied plan key
+    }
   }
 
   // 4. Record payment and update subscription if user is authenticated
+  const resolvedPlan = resolvePlanKey(verifiedPlanKey) || 'monthly'
   if (req.user?.id) {
     try {
-      await supabaseAdmin.from('payments').insert({
+      // 4a. Insert payment ledger record
+      const { error: ledgerErr } = await supabaseAdmin.from('payments').insert({
         user_id:    req.user.id,
         order_id:   orderId,
         payment_id: paymentId,
-        plan:       verifiedPlanKey || 'monthly',
+        plan:       resolvedPlan,
         amount:     orderAmount || 0,
         status:     'success',
-      }).catch(err => console.warn('Payment ledger insert skipped:', err?.message))
+      })
+      if (ledgerErr) console.warn('Payment ledger insert failed:', ledgerErr.message)
 
+      // 4b. Calculate subscription expiry
       const now = new Date()
       let expiresAt = new Date(now)
-      if (verifiedPlanKey === 'yearly') {
+      if (resolvedPlan === 'yearly') {
         expiresAt.setFullYear(expiresAt.getFullYear() + 1)
       } else {
         expiresAt.setMonth(expiresAt.getMonth() + 1)
       }
 
-      await supabaseAdmin.from('profiles').update({
-        plan:                verifiedPlanKey || 'monthly',
+      // 4c. Update user profile with subscription
+      const { error: profileErr } = await supabaseAdmin.from('profiles').update({
+        plan:                resolvedPlan,
         subscription_status: 'active',
         subscription_end:    expiresAt.toISOString(),
         updated_at:          now.toISOString(),
-      }).eq('id', req.user.id).catch(err => console.warn('Profile update skipped:', err?.message))
+      }).eq('id', req.user.id)
+      if (profileErr) console.warn('Profile update failed:', profileErr.message)
 
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('full_name')
-        .eq('id', req.user.id)
-        .single()
-        .catch(() => ({ data: null }))
+      // 4d. Send confirmation email (non-blocking)
+      try {
+        const { data: profile } = await supabaseAdmin
+          .from('profiles')
+          .select('full_name')
+          .eq('id', req.user.id)
+          .single()
 
-      const { data: authUser } = await supabaseAdmin.auth.admin
-        .getUserById(req.user.id)
-        .catch(() => ({ data: null }))
+        const { data: authUser } = await supabaseAdmin.auth.admin
+          .getUserById(req.user.id)
 
-      if (authUser?.user?.email) {
-        sendSubscriptionEmail(
-          authUser.user.email,
-          profile?.full_name,
-          verifiedPlanKey || 'monthly',
-        ).catch(console.error)
+        if (authUser?.user?.email) {
+          sendSubscriptionEmail(
+            authUser.user.email,
+            profile?.full_name,
+            resolvedPlan,
+          ).catch(emailErr => console.warn('Subscription email failed:', emailErr?.message))
+        }
+      } catch (emailLookupErr) {
+        console.warn('Email lookup for subscription confirmation failed:', emailLookupErr?.message)
       }
     } catch (err) {
-      console.warn('Post-payment account updates skipped:', err?.message)
+      // CRITICAL: Log full error for debugging payment issues
+      console.error('Post-payment account updates FAILED:', err)
     }
   }
 
@@ -212,7 +229,7 @@ async function handleVerifyPayment(req, res) {
     message:    'Payment verified successfully!',
     payment_id: paymentId,
     order_id:   orderId,
-    plan:       verifiedPlanKey || null,
+    plan:       resolvedPlan || null,
   })
 }
 
@@ -251,15 +268,19 @@ router.post('/webhook', async (req, res) => {
   const eventId = event.event_id || `${event.event}_${Date.now()}`
   const eventType = event.event
 
-  // Idempotency check
-  const { data: existing } = await supabaseAdmin
-    .from('webhook_events')
-    .select('id')
-    .eq('event_id', eventId)
-    .maybeSingle()
+  // Idempotency check (non-fatal if webhook_events table doesn't exist)
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from('webhook_events')
+      .select('id')
+      .eq('event_id', eventId)
+      .maybeSingle()
 
-  if (existing) {
-    return res.status(200).json({ status: 'already_processed' })
+    if (existing) {
+      return res.status(200).json({ status: 'already_processed' })
+    }
+  } catch (idempotencyErr) {
+    console.warn('Webhook idempotency check failed (table may not exist):', idempotencyErr?.message)
   }
 
   // Log webhook event
@@ -276,19 +297,21 @@ router.post('/webhook', async (req, res) => {
     if (payment) {
       const userId = payment.notes?.supabase_user_id
       const planKey = payment.notes?.plan
-      if (userId && planKey && isPaidPlan(planKey)) {
+      const resolvedWebhookPlan = resolvePlanKey(planKey)
+      if (userId && resolvedWebhookPlan && isPaidPlan(resolvedWebhookPlan)) {
         // Update profile (same as verify endpoint, serves as backup)
         const now = new Date()
         let expiresAt = new Date(now)
-        if (planKey === 'monthly') expiresAt.setMonth(expiresAt.getMonth() + 1)
-        else if (planKey === 'yearly') expiresAt.setFullYear(expiresAt.getFullYear() + 1)
+        if (resolvedWebhookPlan === 'yearly') expiresAt.setFullYear(expiresAt.getFullYear() + 1)
+        else expiresAt.setMonth(expiresAt.getMonth() + 1)
 
-        await supabaseAdmin.from('profiles').update({
-          plan:                planKey,
+        const { error: whProfileErr } = await supabaseAdmin.from('profiles').update({
+          plan:                resolvedWebhookPlan,
           subscription_status: 'active',
           subscription_end:    expiresAt.toISOString(),
           updated_at:          now.toISOString(),
-        }).eq('id', userId).catch(err => console.error('Webhook profile update error:', err))
+        }).eq('id', userId)
+        if (whProfileErr) console.error('Webhook profile update error:', whProfileErr)
       }
     }
   } else if (eventType === 'payment.failed') {

@@ -118,12 +118,17 @@ app.get('/', (req, res) => {
 })
 
 /* ── 404 Handler ────────────────────────────────────────────── */
-app.use((req, res) => {
+app.use((req, res, next) => {
   res.status(404).json({ error: `Route ${req.method} ${req.path} not found` })
 })
 
 /* ── Global Error Handler ───────────────────────────────────── */
 app.use((err, req, res, next) => {
+  // CORS errors come as plain Error objects from cors middleware
+  if (err.message && err.message.includes('CORS')) {
+    return res.status(403).json({ error: 'Cross-Origin Request Blocked by CORS Policy.' })
+  }
+
   console.error('Server Error:', err)
 
   // Supabase / Postgres errors
@@ -135,7 +140,9 @@ app.use((err, req, res, next) => {
   }
 
   const status  = err.statusCode || err.status || 500
-  const message = err.message || 'Internal server error'
+  const message = process.env.NODE_ENV === 'production'
+    ? (status === 500 ? 'Internal server error' : err.message || 'Internal server error')
+    : (err.message || 'Internal server error')
 
   res.status(status).json({
     error: message,

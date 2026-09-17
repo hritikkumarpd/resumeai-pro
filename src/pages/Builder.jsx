@@ -1140,12 +1140,19 @@ export default function Builder() {
   // Fetch export quota on mount (for free-plan users)
   useEffect(() => {
     if (!user) return
+
+    // Fast-path: if frontend context already knows user is Paid, skip API
+    if (profile?.plan === 'monthly' || profile?.plan === 'yearly') {
+      setExportQuota({ plan: profile.plan, unlimited: true, used: 0, limit: Infinity })
+      return
+    }
+
     pdfApi.quota().then(res => {
       if (res.data) setExportQuota(res.data)
     }).catch(() => {
       // Fail silently — quota display is non-critical
     })
-  }, [user])
+  }, [user, profile])
 
   // Auto-populate logged in user defaults & saved photo into resume builder
   useEffect(() => {

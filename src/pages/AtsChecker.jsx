@@ -324,18 +324,50 @@ export default function AtsChecker() {
             <div className="text-center py-12">
               <div className="relative inline-block">
                 <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4"
-                     style={{ background: 'rgba(34,211,238,.1)', border: '2px solid rgba(34,211,238,.3)' }}>
-                  <RefreshCw size={32} className="animate-spin text-cyan-400" />
+                     style={{ background: 'rgba(124,58,237,.15)', border: '2px solid rgba(124,58,237,.4)' }}>
+                  <RefreshCw size={32} className="animate-spin text-purple-400" />
                 </div>
               </div>
-              <p className="text-slate-300 text-sm font-medium">Running deterministic ATS engine...</p>
-              <p className="text-slate-500 text-xs mt-1">Analyzing contact, summary, skills, experience, education, projects & formatting</p>
+              <p className="text-slate-200 text-base font-semibold flex items-center justify-center gap-2">
+                <Sparkles size={16} className="text-cyan-400 animate-pulse" />
+                Evaluating with Gemini AI & ATS Engine...
+              </p>
+              <p className="text-slate-400 text-xs mt-1">Analyzing keywords, section weighting, readability, and ATS parsing standards</p>
             </div>
           )}
 
           {/* Results Dashboard */}
           {result && (
             <div className="space-y-6 animate-fade-in">
+              {/* AI Recruiter Feedback Banner (if AI powered) */}
+              {result.ai_feedback && (
+                <div className="p-6 rounded-2xl relative overflow-hidden"
+                     style={{
+                       background: 'linear-gradient(135deg, rgba(124,58,237,0.18) 0%, rgba(6,182,212,0.12) 100%)',
+                       border: '1px solid rgba(124,58,237,0.4)',
+                       boxShadow: '0 8px 32px -8px rgba(124,58,237,0.25)'
+                     }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-2.5 w-2.5 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
+                      </span>
+                      <h3 className="font-heading font-bold text-base text-white flex items-center gap-2">
+                        <Sparkles size={16} className="text-cyan-400" />
+                        AI Recruiter Executive Assessment
+                      </h3>
+                    </div>
+                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      ✨ Powered by Google Gemini AI
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-200 leading-relaxed font-sans">
+                    {result.ai_feedback}
+                  </p>
+                </div>
+              )}
+
               {/* Row 1: Score + Category Breakdown */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Score Gauge Card */}
@@ -421,7 +453,9 @@ export default function AtsChecker() {
                     <span className="flex items-center gap-1.5">
                       <ShieldCheck size={14} className="text-emerald-400" /> Standard ATS Compliant
                     </span>
-                    <span>Deterministic Analysis Engine</span>
+                    <span className="text-cyan-400 font-medium">
+                      {result.is_ai_powered ? '✨ Evaluated with Google Gemini AI' : 'Deterministic Analysis Engine'}
+                    </span>
                   </div>
                 </div>
               </div>

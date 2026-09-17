@@ -45,21 +45,24 @@ export async function enhanceSectionWithAI({ section, content, context }) {
 }
 
 /**
- * Generate cover letter via backend AI endpoint or fallback.
+ * Generate cover letter via dedicated backend AI endpoint.
+ * Returns the generated letter string or null on failure.
  */
 export async function generateCoverLetterWithAI({ name, role, company, skills, experience, tone }) {
   try {
-    const prompt = `Write a professional cover letter for ${name || 'an applicant'} applying for the ${role || 'target'} role at ${company || 'the company'}. Tone: ${tone || 'Professional'}. Key skills: ${skills || 'relevant skills'}. Experience: ${experience || 'relevant experience'}.`
-    const { data } = await aiApi.enhance({
-      section: 'summary',
-      content: prompt,
-      context: { role, company, skills: skills ? skills.split(',').map(s => s.trim()) : [] },
+    const { data } = await aiApi.coverLetter({
+      name,
+      role,
+      company,
+      skills,
+      experience,
+      tone,
     })
-    if (data?.enhanced && !data._fallback) {
-      return data.enhanced
+    if (data?.letter) {
+      return data.letter
     }
   } catch (err) {
-    console.warn('Backend cover letter AI unavailable, using structured template:', err?.message)
+    console.warn('Backend cover letter AI error:', err?.response?.data?.error || err?.message)
   }
   return null
 }

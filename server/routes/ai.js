@@ -1,39 +1,12 @@
 const router = require('express').Router()
-const { requireAuth } = require('../middleware/requireAuth')
+const { optionalAuth } = require('../middleware/requireAuth')
+const { callGemini, isGeminiAvailable } = require('../lib/gemini')
 
-/**
- * Call Google Gemini API with the server-side API key.
- * User-supplied keys are NOT accepted — all AI goes through server key.
- */
-async function callGemini(prompt) {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    return null
-  }
-
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash']
-
-  for (const model of models) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
-        })
-      })
-      if (response.ok) {
-        const data = await response.json()
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
-        if (text) return text
-      }
-    } catch (_) {
-      // Try next model
-    }
-  }
-  return null
+// Startup check: warn if GEMINI_API_KEY is not configured
+if (!isGeminiAvailable()) {
+  console.warn('⚠️  GEMINI_API_KEY not set — AI features will use basic fallback (no Gemini)')
+} else {
+  console.log('🤖 Gemini AI initialized with gemini-3.6-flash')
 }
 
 /**
@@ -94,7 +67,7 @@ function fallbackEnhanceBullets(bullets) {
 }
 
 /* ── POST /api/ai/enhance-summary ──────────────────────────── */
-router.post('/enhance-summary', requireAuth, async (req, res) => {
+router.post('/enhance-summary', optionalAuth, async (req, res) => {
   const { summary, role, skills } = req.body
 
   if (!summary || !summary.trim()) {
@@ -128,17 +101,18 @@ CRITICAL RULES:
     console.warn('Gemini API error:', err.message)
   }
 
-  // Development fallback (no API key configured)
+  // Fallback: basic word-swap improvement (no AI)
   const fallback = fallbackEnhanceSummary(summary, role, skills)
   res.json({
     original: summary,
     enhanced: fallback,
     _fallback: true,
+    _fallback_reason: isGeminiAvailable() ? 'Gemini returned no result' : 'GEMINI_API_KEY not configured on server',
   })
 })
 
 /* ── POST /api/ai/enhance-bullets ──────────────────────────── */
-router.post('/enhance-bullets', requireAuth, async (req, res) => {
+router.post('/enhance-bullets', optionalAuth, async (req, res) => {
   const { bullets, role, company } = req.body
 
   if (!bullets || !Array.isArray(bullets) || bullets.length === 0) {
@@ -179,17 +153,18 @@ CRITICAL RULES:
     console.warn('Gemini API error:', err.message)
   }
 
-  // Development fallback
+  // Fallback: basic word-swap improvement (no AI)
   const enhanced = fallbackEnhanceBullets(bullets)
   res.json({
     original: bullets,
     bullets: enhanced,
     _fallback: true,
+    _fallback_reason: isGeminiAvailable() ? 'Gemini returned no result' : 'GEMINI_API_KEY not configured on server',
   })
 })
 
 /* ── POST /api/ai/enhance ──────────────────────────────────── */
-router.post('/enhance', requireAuth, async (req, res) => {
+router.post('/enhance', optionalAuth, async (req, res) => {
   const { section, content, context } = req.body
 
   if (!section || !content) {
@@ -237,6 +212,93 @@ CRITICAL RULES:
     original: content,
     enhanced: fallback,
     _fallback: true,
+    _fallback_reason: isGeminiAvailable() ? 'Gemini returned no result' : 'GEMINI_API_KEY not configured on server',
+  })
+})
+
+/* ── POST /api/ai/cover-letter ─────────────────────────────── */
+router.post('/cover-letter', optionalAuth, async (req, res) => {
+  const { name, role, company, skills, experience, tone } = req.body
+
+  if (!role || !company) {
+    return res.status(400).json({ error: 'Job role and company name are required.' })
+  }
+
+  const skillList = skills || 'relevant technical and interpersonal skills'
+  const expText = experience || 'relevant professional experience'
+  const toneText = tone || 'Professional'
+  const applicantName = name || 'the applicant'
+
+  const prompt = `You are an expert career coach and professional cover letter writer.
+Write a complete, professional cover letter for ${applicantName} applying for the "${role}" position at ${company}.
+
+Applicant Details:
+- Name: ${applicantName}
+- Key Skills: ${skillList}
+- Experience: ${expText}
+- Desired Tone: ${toneText}
+
+CRITICAL RULES:
+- Write a COMPLETE cover letter with date, greeting, 3-4 body paragraphs, and closing.
+- Match the tone: ${toneText} (Professional = formal, Enthusiastic = energetic, Confident = assertive, Humble = modest).
+- Mention the company name "${company}" and the role "${role}" naturally.
+- Highlight the applicant's skills: ${skillList}.
+- DO NOT fabricate specific metrics, company names, or achievements the applicant did not provide.
+- DO NOT use generic placeholder text like "[Your Name]" or "[Address]".
+- Use the applicant's actual name: ${applicantName}.
+- Output ONLY the cover letter text. No markdown formatting, no code blocks, no preamble.
+- Start with today's date, then the greeting.`
+
+  try {
+    const letter = await callGemini(prompt, 1500)
+    if (letter) {
+      const cleaned = letter
+        .replace(/^```[\s\S]*?\n/, '')
+        .replace(/```\s*$/, '')
+        .replace(/^["']|["']$/g, '')
+        .trim()
+      return res.json({ letter: cleaned })
+    }
+  } catch (err) {
+    console.warn('Gemini cover letter error:', err.message)
+  }
+
+  // Smart template fallback when Gemini is unavailable
+  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  const openings = {
+    Professional: `I am writing to express my strong interest in the ${role} position at ${company}.`,
+    Enthusiastic: `I was thrilled to discover the ${role} opening at ${company} and am excited to apply!`,
+    Confident:    `With ${expText} of proven expertise, I am the ideal candidate for the ${role} role at ${company}.`,
+    Humble:       `I am honored to apply for the ${role} position at ${company} and believe I can make a meaningful contribution.`,
+  }
+  const opening = openings[toneText] || openings.Professional
+
+  const fallbackLetter = `${today}
+
+Hiring Manager
+${company}
+
+Dear Hiring Manager,
+
+${opening}
+
+Throughout my career${experience ? ` spanning ${experience}` : ''}, I have developed a strong foundation in ${skillList}. My background has equipped me with the technical depth and collaborative mindset to deliver exceptional results and contribute meaningfully to ${company}'s mission and goals.
+
+In my previous roles, I have consistently demonstrated the ability to solve complex problems, collaborate with cross-functional teams, and drive measurable outcomes. I am particularly drawn to ${company} because of your reputation for innovation and commitment to excellence — values that deeply align with my own professional philosophy.
+
+I am confident that my expertise in ${skillList} would make me a valuable addition to your team. I look forward to the opportunity to bring my unique perspective and skills to the ${role} position and contribute to ${company}'s continued success.
+
+Thank you for considering my application. I would welcome the opportunity to discuss how my background and enthusiasm align with your needs. Please feel free to reach out at your earliest convenience.
+
+Warm regards,
+
+${applicantName}
+${role} Applicant`
+
+  res.json({
+    letter: fallbackLetter,
+    _fallback: true,
+    _fallback_reason: isGeminiAvailable() ? 'Gemini returned no result' : 'GEMINI_API_KEY not configured — using smart template',
   })
 })
 

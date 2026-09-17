@@ -74,7 +74,7 @@ const authLimiter = rateLimit({
 })
 const aiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: 100,
   message: { error: 'Too many AI requests, please try again in a few minutes.' },
 })
 const paymentLimiter = rateLimit({

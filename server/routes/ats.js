@@ -1,6 +1,7 @@
 const router = require('express').Router()
 const { supabaseAdmin } = require('../lib/supabase')
 const { requireAuth, optionalAuth } = require('../middleware/requireAuth')
+const { callGeminiJson, isGeminiAvailable } = require('../lib/gemini')
 
 /* ── Stop words for keyword extraction ──────────────────────── */
 const STOP_WORDS = new Set([
@@ -538,6 +539,103 @@ function parseResumeTextToStructure(text) {
   return sections
 }
 
+/* ── Gemini AI ATS Analyzer ─────────────────────────────────── */
+async function analyzeWithAiAts(resumeText, jobDescription) {
+  if (!isGeminiAvailable() || !resumeText || !resumeText.trim()) return null
+
+  const cleanResume = resumeText.trim().slice(0, 4500)
+  const cleanJd = (jobDescription || '').trim().slice(0, 3000)
+
+  const prompt = `You are an elite Applicant Tracking System (ATS) algorithm and senior technical recruiter.
+Evaluate this candidate resume against standard ATS algorithms (Workday, Taleo, Greenhouse, Lever)${cleanJd ? ' and against the target Job Description' : ''}.
+
+${cleanJd ? `TARGET JOB DESCRIPTION:\n"""\n${cleanJd}\n"""\n` : ''}
+
+CANDIDATE RESUME:
+"""
+${cleanResume}
+"""
+
+CRITICAL INSTRUCTIONS:
+1. Compute a realistic ATS compatibility score from 0 to 100 based on standard keyword coverage, section structure, action-oriented bullet points, and formatting compliance.
+2. Provide a 7-category score breakdown:
+   - "contact": score (0-10, max: 10, details: array of 1-3 short strings)
+   - "summary": score (0-15, max: 15, details: array of 1-3 short strings)
+   - "skills": score (0-20, max: 20, details: array of 1-3 short strings)
+   - "experience": score (0-25, max: 25, details: array of 1-3 short strings)
+   - "education": score (0-10, max: 10, details: array of 1-3 short strings)
+   - "projects": score (0-10, max: 10, details: array of 1-3 short strings)
+   - "formatting": score (0-10, max: 10, details: array of 1-3 short strings)
+3. "strengths": 3 to 6 specific, tangible strengths identified in this resume.
+4. "issues": 2 to 5 specific ATS vulnerabilities or gaps found (e.g. missing critical skills, lack of quantified impact, formatting gaps).
+5. "recommendations": 3 to 6 practical, prioritized steps to maximize the candidate's interview callback rate.
+6. "matched_keywords": An array of technical, domain, and qualification keywords that match the target role.
+7. "missing_keywords": An array of high-priority keywords from the job description (or expected in this domain) that the resume is missing.
+8. "ai_feedback": A 2-4 sentence executive summary from the AI hiring manager summarizing the resume's ATS readiness and key advice.
+
+Return ONLY valid JSON matching this schema:
+{
+  "score": 75,
+  "breakdown": {
+    "contact": { "score": 10, "max": 10, "details": ["Full name, email, phone, and links present"] },
+    "summary": { "score": 11, "max": 15, "details": ["Clear role-targeted summary"] },
+    "skills": { "score": 15, "max": 20, "details": ["Good keyword density"] },
+    "experience": { "score": 19, "max": 25, "details": ["Strong action verbs"] },
+    "education": { "score": 10, "max": 10, "details": ["Degree clearly documented"] },
+    "projects": { "score": 7, "max": 10, "details": ["Relevant technical projects"] },
+    "formatting": { "score": 8, "max": 10, "details": ["ATS standard chronological layout"] }
+  },
+  "strengths": ["..."],
+  "issues": ["..."],
+  "recommendations": ["..."],
+  "matched_keywords": ["..."],
+  "missing_keywords": ["..."],
+  "ai_feedback": "..."
+}`
+
+  try {
+    const aiResult = await callGeminiJson(prompt, 2000)
+    if (aiResult && typeof aiResult.score === 'number' && aiResult.breakdown) {
+      const defaultBreakdown = {
+        contact: { score: 8, max: 10, details: [] },
+        summary: { score: 10, max: 15, details: [] },
+        skills: { score: 14, max: 20, details: [] },
+        experience: { score: 18, max: 25, details: [] },
+        education: { score: 8, max: 10, details: [] },
+        projects: { score: 7, max: 10, details: [] },
+        formatting: { score: 8, max: 10, details: [] },
+      }
+
+      const normalizedBreakdown = {}
+      for (const [cat, def] of Object.entries(defaultBreakdown)) {
+        const item = aiResult.breakdown[cat] || {}
+        const s = typeof item.score === 'number' ? Math.min(Math.max(Math.round(item.score), 0), def.max) : def.score
+        normalizedBreakdown[cat] = {
+          score: s,
+          max: def.max,
+          percentage: Math.round((s / def.max) * 100),
+          details: Array.isArray(item.details) && item.details.length > 0 ? item.details : [`${cat.charAt(0).toUpperCase() + cat.slice(1)} evaluated`],
+        }
+      }
+
+      return {
+        score: Math.min(Math.max(Math.round(aiResult.score), 0), 100),
+        breakdown: normalizedBreakdown,
+        strengths: Array.isArray(aiResult.strengths) && aiResult.strengths.length > 0 ? aiResult.strengths : ['Solid foundational resume structure.'],
+        issues: Array.isArray(aiResult.issues) ? aiResult.issues : [],
+        recommendations: Array.isArray(aiResult.recommendations) && aiResult.recommendations.length > 0 ? aiResult.recommendations : ['Tailor resume bullet points specifically to target job description keywords.'],
+        matched_keywords: Array.isArray(aiResult.matched_keywords) ? aiResult.matched_keywords : [],
+        missing_keywords: Array.isArray(aiResult.missing_keywords) ? aiResult.missing_keywords : [],
+        ai_feedback: typeof aiResult.ai_feedback === 'string' ? aiResult.ai_feedback : '',
+        is_ai_powered: true,
+      }
+    }
+  } catch (err) {
+    console.warn('AI ATS evaluation error, falling back to deterministic:', err.message)
+  }
+  return null
+}
+
 /* ── POST /api/ats/analyze (JD keyword + full structure analysis) ── */
 router.post('/analyze', optionalAuth, async (req, res) => {
   const { resume_text, job_description, resume_id, job_title, company, resume_data } = req.body
@@ -550,22 +648,66 @@ router.post('/analyze', optionalAuth, async (req, res) => {
     ? resume_data
     : parseResumeTextToStructure(resume_text || '')
 
-  const structureResult = analyzeResumeStructure(structuredData)
-
-  let keywordResult = null
   const textForKeywords = resume_text || (
     [
       structuredData.personal?.name,
+      structuredData.personal?.title,
       structuredData.summary,
-      structuredData.skills?.join(' '),
-      structuredData.experience?.map(e => `${e.role} ${e.company} ${(e.bullets || []).join(' ')}`).join(' '),
-    ].filter(Boolean).join(' ')
+      structuredData.skills?.join(', '),
+      structuredData.experience?.map(e => `${e.role} at ${e.company}: ${(e.bullets || []).join(' ')}`).join('\n'),
+      structuredData.education?.map(e => `${e.degree} from ${e.school}`).join('\n'),
+      structuredData.projects?.map(p => `${p.name}: ${p.desc || ''}`).join('\n'),
+    ].filter(Boolean).join('\n\n')
   )
 
-  if (job_description && job_description.trim().length >= 20) {
-    keywordResult = analyzeKeywordMatch(textForKeywords, job_description)
-    // Blend: 40% structure, 60% keywords
-    structureResult.score = Math.round(structureResult.score * 0.4 + keywordResult.score * 0.6)
+  // 1. Try AI-powered ATS evaluation first
+  let aiAtsResult = null
+  if (isGeminiAvailable()) {
+    aiAtsResult = await analyzeWithAiAts(textForKeywords, job_description)
+  }
+
+  let finalScore = 0
+  let finalBreakdown = null
+  let finalStrengths = []
+  let finalIssues = []
+  let finalRecommendations = []
+  let matchedKeywords = []
+  let missingKeywords = []
+  let keywordResult = null
+  let isAiPowered = false
+  let aiFeedback = ''
+
+  if (aiAtsResult) {
+    finalScore = aiAtsResult.score
+    finalBreakdown = aiAtsResult.breakdown
+    finalStrengths = aiAtsResult.strengths
+    finalIssues = aiAtsResult.issues
+    finalRecommendations = aiAtsResult.recommendations
+    matchedKeywords = aiAtsResult.matched_keywords
+    missingKeywords = aiAtsResult.missing_keywords
+    aiFeedback = aiAtsResult.ai_feedback
+    isAiPowered = true
+    keywordResult = {
+      score: aiAtsResult.score,
+      matched: matchedKeywords,
+      missing: missingKeywords,
+      total_keywords: matchedKeywords.length + missingKeywords.length,
+    }
+  } else {
+    // 2. Deterministic Fallback Engine
+    const structureResult = analyzeResumeStructure(structuredData)
+    if (job_description && job_description.trim().length >= 20) {
+      keywordResult = analyzeKeywordMatch(textForKeywords, job_description)
+      structureResult.score = Math.round(structureResult.score * 0.4 + keywordResult.score * 0.6)
+    }
+    finalScore = structureResult.score
+    finalBreakdown = structureResult.breakdown
+    finalStrengths = structureResult.strengths
+    finalIssues = structureResult.issues
+    finalRecommendations = structureResult.recommendations
+    matchedKeywords = keywordResult ? keywordResult.matched : []
+    missingKeywords = keywordResult ? keywordResult.missing : []
+    isAiPowered = false
   }
 
   // Save to history if user is authenticated
@@ -580,10 +722,10 @@ router.post('/analyze', optionalAuth, async (req, res) => {
         company:          company   || null,
         job_description:  job_description || '',
         resume_text:      textForKeywords,
-        score:            structureResult.score,
-        matched_keywords: keywordResult?.matched || [],
-        missing_keywords: keywordResult?.missing || [],
-        total_keywords:   keywordResult?.total_keywords || 0,
+        score:            finalScore,
+        matched_keywords: matchedKeywords,
+        missing_keywords: missingKeywords,
+        total_keywords:   matchedKeywords.length + missingKeywords.length,
       })
       .select()
       .single()
@@ -595,21 +737,23 @@ router.post('/analyze', optionalAuth, async (req, res) => {
     if (resume_id) {
       await supabaseAdmin
         .from('resumes')
-        .update({ ats_score: structureResult.score })
+        .update({ ats_score: finalScore })
         .eq('id', resume_id)
         .eq('user_id', req.user.id)
     }
   }
 
   res.json({
-    score:            structureResult.score,
-    breakdown:        structureResult.breakdown,
-    strengths:        structureResult.strengths,
-    issues:           structureResult.issues,
-    recommendations:  structureResult.recommendations,
-    matched_keywords: keywordResult ? keywordResult.matched : [],
-    missing_keywords: keywordResult ? keywordResult.missing : [],
+    score:            finalScore,
+    breakdown:        finalBreakdown,
+    strengths:        finalStrengths,
+    issues:           finalIssues,
+    recommendations:  finalRecommendations,
+    matched_keywords: matchedKeywords,
+    missing_keywords: missingKeywords,
     keyword_match:    keywordResult,
+    ai_feedback:      aiFeedback,
+    is_ai_powered:    isAiPowered,
     id:               record?.id,
     created_at:       record?.created_at,
   })
@@ -627,39 +771,79 @@ router.post('/analyze-resume', optionalAuth, async (req, res) => {
     ? resume_data
     : parseResumeTextToStructure(resume_text || '')
 
-  // Structured ATS analysis
-  const structureResult = analyzeResumeStructure(structuredData)
+  const parts = []
+  const p = structuredData.personal || {}
+  if (p.name) parts.push(p.name)
+  if (p.title) parts.push(p.title)
+  if (structuredData.summary) parts.push(structuredData.summary)
+  ;(structuredData.experience || []).forEach(exp => {
+    if (exp.role) parts.push(exp.role)
+    if (exp.company) parts.push(exp.company)
+    ;(exp.bullets || []).forEach(b => parts.push(b))
+  })
+  ;(structuredData.skills || []).forEach(s => parts.push(s))
+  ;(structuredData.education || []).forEach(edu => {
+    if (edu.degree) parts.push(edu.degree)
+    if (edu.school) parts.push(edu.school)
+  })
+  ;(structuredData.projects || []).forEach(proj => {
+    if (proj.name) parts.push(proj.name)
+    if (proj.desc) parts.push(proj.desc)
+  })
+  ;(structuredData.certifications || []).forEach(c => {
+    if (c.name) parts.push(c.name)
+  })
 
+  const fullResumeText = parts.join('\n') || resume_text || ''
+
+  // 1. Try AI-powered ATS evaluation first
+  let aiAtsResult = null
+  if (isGeminiAvailable()) {
+    aiAtsResult = await analyzeWithAiAts(fullResumeText, job_description)
+  }
+
+  let finalScore = 0
+  let finalBreakdown = null
+  let finalStrengths = []
+  let finalIssues = []
+  let finalRecommendations = []
+  let matchedKeywords = []
+  let missingKeywords = []
   let keywordResult = null
-  if (job_description && job_description.trim().length >= 20) {
-    const parts = []
-    const p = structuredData.personal || {}
-    if (p.name) parts.push(p.name)
-    if (p.title) parts.push(p.title)
-    if (structuredData.summary) parts.push(structuredData.summary)
-    ;(structuredData.experience || []).forEach(exp => {
-      if (exp.role) parts.push(exp.role)
-      if (exp.company) parts.push(exp.company)
-      ;(exp.bullets || []).forEach(b => parts.push(b))
-    })
-    ;(structuredData.skills || []).forEach(s => parts.push(s))
-    ;(structuredData.education || []).forEach(edu => {
-      if (edu.degree) parts.push(edu.degree)
-      if (edu.school) parts.push(edu.school)
-    })
-    ;(structuredData.projects || []).forEach(proj => {
-      if (proj.name) parts.push(proj.name)
-      if (proj.desc) parts.push(proj.desc)
-    })
-    ;(structuredData.certifications || []).forEach(c => {
-      if (c.name) parts.push(c.name)
-    })
+  let isAiPowered = false
+  let aiFeedback = ''
 
-    const resumeText = parts.join(' ') || resume_text || ''
-    keywordResult = analyzeKeywordMatch(resumeText, job_description)
-
-    // Blend: 40% structure, 60% keywords
-    structureResult.score = Math.round(structureResult.score * 0.4 + keywordResult.score * 0.6)
+  if (aiAtsResult) {
+    finalScore = aiAtsResult.score
+    finalBreakdown = aiAtsResult.breakdown
+    finalStrengths = aiAtsResult.strengths
+    finalIssues = aiAtsResult.issues
+    finalRecommendations = aiAtsResult.recommendations
+    matchedKeywords = aiAtsResult.matched_keywords
+    missingKeywords = aiAtsResult.missing_keywords
+    aiFeedback = aiAtsResult.ai_feedback
+    isAiPowered = true
+    keywordResult = {
+      score: aiAtsResult.score,
+      matched: matchedKeywords,
+      missing: missingKeywords,
+      total_keywords: matchedKeywords.length + missingKeywords.length,
+    }
+  } else {
+    // 2. Structured ATS analysis fallback
+    const structureResult = analyzeResumeStructure(structuredData)
+    if (job_description && job_description.trim().length >= 20) {
+      keywordResult = analyzeKeywordMatch(fullResumeText, job_description)
+      structureResult.score = Math.round(structureResult.score * 0.4 + keywordResult.score * 0.6)
+    }
+    finalScore = structureResult.score
+    finalBreakdown = structureResult.breakdown
+    finalStrengths = structureResult.strengths
+    finalIssues = structureResult.issues
+    finalRecommendations = structureResult.recommendations
+    matchedKeywords = keywordResult ? keywordResult.matched : []
+    missingKeywords = keywordResult ? keywordResult.missing : []
+    isAiPowered = false
   }
 
   // Save to history if user is authenticated
@@ -674,10 +858,10 @@ router.post('/analyze-resume', optionalAuth, async (req, res) => {
         company:          company   || null,
         job_description:  job_description || '',
         resume_text:      JSON.stringify(structuredData),
-        score:            structureResult.score,
-        matched_keywords: keywordResult?.matched || [],
-        missing_keywords: keywordResult?.missing || [],
-        total_keywords:   keywordResult?.total_keywords || 0,
+        score:            finalScore,
+        matched_keywords: matchedKeywords,
+        missing_keywords: missingKeywords,
+        total_keywords:   matchedKeywords.length + missingKeywords.length,
       })
       .select()
       .single()
@@ -688,21 +872,23 @@ router.post('/analyze-resume', optionalAuth, async (req, res) => {
     if (resume_id) {
       await supabaseAdmin
         .from('resumes')
-        .update({ ats_score: structureResult.score })
+        .update({ ats_score: finalScore })
         .eq('id', resume_id)
         .eq('user_id', req.user.id)
     }
   }
 
   res.json({
-    score:            structureResult.score,
-    breakdown:        structureResult.breakdown,
-    strengths:        structureResult.strengths,
-    issues:           structureResult.issues,
-    recommendations:  structureResult.recommendations,
-    matched_keywords: keywordResult ? keywordResult.matched : [],
-    missing_keywords: keywordResult ? keywordResult.missing : [],
+    score:            finalScore,
+    breakdown:        finalBreakdown,
+    strengths:        finalStrengths,
+    issues:           finalIssues,
+    recommendations:  finalRecommendations,
+    matched_keywords: matchedKeywords,
+    missing_keywords: missingKeywords,
     keyword_match:    keywordResult,
+    ai_feedback:      aiFeedback,
+    is_ai_powered:    isAiPowered,
     id:               record?.id,
     created_at:       record?.created_at,
   })

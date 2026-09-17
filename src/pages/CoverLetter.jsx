@@ -55,6 +55,7 @@ export default function CoverLetter() {
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [lastForm, setLastForm] = useState(null)
+  const [isAi, setIsAi] = useState(false)
   const [template, setTemplate] = useState(TEMPLATES[0])
   const [tone, setTone] = useState(TONES[0])
   const { register, handleSubmit, reset, formState: { errors } } = useForm()
@@ -82,7 +83,10 @@ export default function CoverLetter() {
     setLastForm(data)
     
     let full = await generateCoverLetterWithAI({ ...data, tone })
-    if (!full) {
+    if (full) {
+      setIsAi(true)
+    } else {
+      setIsAi(false)
       full = generateLetter({ ...data, tone })
     }
 
@@ -223,7 +227,7 @@ export default function CoverLetter() {
                 <button type="submit" disabled={generating}
                         className="btn-primary py-3.5 rounded-xl gap-2 justify-center mt-1 disabled:opacity-60">
                   {generating
-                    ? <><span className="spinner" /> Generating...</>
+                    ? <><span className="spinner" /> Writing with Gemini AI...</>
                     : <><Sparkles size={16} /> Generate Cover Letter</>
                   }
                 </button>
@@ -243,6 +247,11 @@ export default function CoverLetter() {
                     ) : (
                       <span className="flex items-center gap-1 text-slate-400">
                         <CheckCircle size={13} className="text-emerald-400" /> Generated
+                      </span>
+                    )}
+                    {isAi && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1 ml-1.5">
+                        <Sparkles size={11} className="text-cyan-400" /> Gemini AI
                       </span>
                     )}
                   </span>

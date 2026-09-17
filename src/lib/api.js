@@ -26,11 +26,13 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
-    const isAuthEndpoint = error.config?.url?.includes('/auth/login') ||
-                           error.config?.url?.includes('/auth/register') ||
-                           error.config?.url?.includes('/auth/forgot-password')
+    const isExempt = error.config?.url?.includes('/auth/login') ||
+                     error.config?.url?.includes('/auth/register') ||
+                     error.config?.url?.includes('/auth/forgot-password') ||
+                     error.config?.url?.includes('/ai/') ||
+                     error.config?.url?.includes('/ats/')
 
-    if (error.response?.status === 401 && !isAuthEndpoint) {
+    if (error.response?.status === 401 && !isExempt) {
       // Try to refresh session
       try {
         const { data } = await supabase.auth.refreshSession()
@@ -40,8 +42,9 @@ api.interceptors.response.use(
         }
       } catch (_) {}
 
-      // If refresh fails and not already on /login, redirect
-      if (window.location.pathname !== '/login') {
+      // If refresh fails and not already on /login or work-in-progress pages, redirect
+      const safePages = ['/login', '/register', '/builder', '/ats', '/cover-letter']
+      if (!safePages.some(p => window.location.pathname.startsWith(p))) {
         window.location.href = '/login'
       }
     }
@@ -101,6 +104,7 @@ export const aiApi = {
   enhanceSummary: (data) => api.post('/ai/enhance-summary', data),
   enhanceBullets: (data) => api.post('/ai/enhance-bullets', data),
   enhance:        (data) => api.post('/ai/enhance', data),
+  coverLetter:    (data) => api.post('/ai/cover-letter', data),
 }
 
 /* ── Payment (Razorpay Standard Checkout) ───────────────────────── */

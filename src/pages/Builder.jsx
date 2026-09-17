@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   enhanceSummaryWithAI,
   enhanceBulletsWithAI,
+  enhanceSectionWithAI,
 } from '../lib/aiService'
 import { resumeApi } from '../lib/api'
 import { resumeStorage } from '../lib/resumeStorage'
@@ -1100,6 +1101,7 @@ export default function Builder() {
   // AI State (Preview-based flow — no user API keys)
   const [isEnhancingSummary, setIsEnhancingSummary] = useState(false)
   const [enhancingExpId, setEnhancingExpId] = useState(null)
+  const [enhancingProjectId, setEnhancingProjectId] = useState(null)
   const [aiPreview, setAiPreview] = useState(null) // { type, original, enhanced, targetId? }
   const [aiPreviewError, setAiPreviewError] = useState(null)
 
@@ -1459,6 +1461,34 @@ export default function Builder() {
     }
   }
 
+  // AI Auto-Enhance Project with Gemini (preview-based)
+  const handleEnhanceProject = async (projectId) => {
+    const proj = data.projects.find(p => p.id === projectId)
+    if (!proj || !proj.desc) return
+    setEnhancingProjectId(projectId)
+    setAiPreviewError(null)
+    try {
+      const result = await enhanceSectionWithAI({
+        section: 'projects',
+        content: `Project Name: ${proj.name || 'Project'}\nDescription: ${proj.desc}`,
+        context: { role: data.personal.title, skills: data.skills }
+      })
+      if (result?.enhanced) {
+        setAiPreview({
+          type: 'project',
+          targetId: projectId,
+          original: proj.desc,
+          enhanced: result.enhanced,
+        })
+      }
+    } catch (err) {
+      setAiPreviewError(err?.response?.data?.error || err?.message || 'AI enhancement failed. Please try again.')
+      setTimeout(() => setAiPreviewError(null), 5000)
+    } finally {
+      setEnhancingProjectId(null)
+    }
+  }
+
   // Apply AI enhancement from preview modal
   const handleApplyAiPreview = () => {
     if (!aiPreview) return
@@ -1466,6 +1496,8 @@ export default function Builder() {
       upd('summary', aiPreview.enhanced)
     } else if (aiPreview.type === 'bullets' && aiPreview.targetId) {
       updExp(aiPreview.targetId, 'bullets', aiPreview.enhanced)
+    } else if (aiPreview.type === 'project' && aiPreview.targetId) {
+      upd('projects', data.projects.map(p => p.id === aiPreview.targetId ? { ...p, desc: aiPreview.enhanced } : p))
     }
     setAiPreview(null)
   }
@@ -1478,6 +1510,8 @@ export default function Builder() {
       handleEnhanceSummary()
     } else if (aiPreview.type === 'bullets' && aiPreview.targetId) {
       handleEnhanceBullets(aiPreview.targetId)
+    } else if (aiPreview.type === 'project' && aiPreview.targetId) {
+      handleEnhanceProject(aiPreview.targetId)
     }
   }
 
@@ -2270,7 +2304,23 @@ export default function Builder() {
                             </button>
                           </div>
                           <Field label="Project Name" value={p.name} onChange={v => upd('projects', data.projects.map(x => x.id === p.id ? { ...x, name: v } : x))} placeholder="AI Resume & ATS Matcher" />
-                          <Field label="Description" value={p.desc} onChange={v => upd('projects', data.projects.map(x => x.id === p.id ? { ...x, desc: v } : x))} placeholder="Key features, technologies, and achievements..." multiline />
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Description</label>
+                              {p.desc && p.desc.trim().length > 5 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleEnhanceProject(p.id)}
+                                  disabled={enhancingProjectId === p.id}
+                                  className="flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 transition-colors font-medium cursor-pointer"
+                                >
+                                  <Sparkles size={11} className={enhancingProjectId === p.id ? 'animate-spin' : ''} />
+                                  <span>{enhancingProjectId === p.id ? 'Enhancing...' : 'AI Enhance Project'}</span>
+                                </button>
+                              )}
+                            </div>
+                            <Field value={p.desc} onChange={v => upd('projects', data.projects.map(x => x.id === p.id ? { ...x, desc: v } : x))} placeholder="Key features, technologies, and achievements..." multiline />
+                          </div>
                           <Field label="GitHub / Demo URL" value={p.link} onChange={v => upd('projects', data.projects.map(x => x.id === p.id ? { ...x, link: v } : x))} placeholder="github.com/hritikkumar/project" />
                         </div>
                       ))}
@@ -2720,8 +2770,8 @@ export default function Builder() {
                     <span className="text-[10px] text-slate-500">Current</span>
                   </div>
                   <div className="text-xs text-slate-400 leading-relaxed overflow-y-auto flex-1 font-sans">
-                    {aiPreview.type === 'summary' ? (
-                      <p className="whitespace-pre-wrap">{aiPreview.original || '(No summary entered)'}</p>
+                    {aiPreview.type === 'summary' || aiPreview.type === 'project' ? (
+                      <p className="whitespace-pre-wrap">{aiPreview.original || '(No content entered)'}</p>
                     ) : (
                       <ul className="list-disc list-inside space-y-1.5">
                         {Array.isArray(aiPreview.original) ? (
@@ -2745,7 +2795,7 @@ export default function Builder() {
                   </div>
                   <div className="text-xs text-slate-200 leading-relaxed overflow-y-auto flex-1 font-sans"
                        style={{ color: isLight ? '#14532d' : '#e2e8f0' }}>
-                    {aiPreview.type === 'summary' ? (
+                    {aiPreview.type === 'summary' || aiPreview.type === 'project' ? (
                       <p className="whitespace-pre-wrap font-medium">{aiPreview.enhanced}</p>
                     ) : (
                       <ul className="list-disc list-inside space-y-1.5">

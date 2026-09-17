@@ -5,15 +5,15 @@ import {
   BarChart2, RefreshCw, FileText, Sparkles, ArrowRight, ShieldCheck, Check
 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { calcAtsScore } from '../lib/utils'
 import { useAuth } from '../context/AuthContext'
 import { atsApi } from '../lib/api'
 
-// Set up PDF.js worker
-try {
-  const workerPath = new URL('../../../node_modules/pdfjs-dist/build/pdf.worker.js', import.meta.url).href
-  pdfjsLib.GlobalWorkerOptions.workerSrc = workerPath
-} catch (_) {}
+// Set up PDF.js worker with Vite asset URL and CDN fallback
+if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker || `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '6.3.289'}/build/pdf.worker.min.mjs`
+}
 
 // Function to extract text from PDF
 async function extractTextFromPdf(file) {

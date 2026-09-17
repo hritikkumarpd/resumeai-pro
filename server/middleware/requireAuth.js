@@ -47,7 +47,7 @@ function requirePro(req, res, next) {
   if (isPaidPlan(plan)) return next()
   return res.status(403).json({
     error: 'This feature requires a Pro plan (Monthly or Yearly).',
-    upgrade_url: `${process.env.FRONTEND_URL}/pricing`,
+    upgrade_url: `${(process.env.FRONTEND_URL || 'https://resumeaihritik.vercel.app').replace(/\/+$/, '')}/pricing`,
   })
 }
 

@@ -1606,7 +1606,9 @@ export default function Builder() {
         'http://localhost:4000/api/pdf/render-html',
       ]
       if (import.meta.env.VITE_API_URL) {
-        endpoints.unshift(`${import.meta.env.VITE_API_URL}/api/pdf/render-html`)
+        const rawBase = String(import.meta.env.VITE_API_URL).replace(/\/+$/, '')
+        const pdfUrl = rawBase.endsWith('/api') ? `${rawBase}/pdf/render-html` : `${rawBase}/api/pdf/render-html`
+        endpoints.unshift(pdfUrl)
       }
 
       for (const endpoint of endpoints) {

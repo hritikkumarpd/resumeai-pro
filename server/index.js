@@ -28,7 +28,7 @@ app.use(helmet())
 app.use(compression())
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 
-// CORS — allow only verified frontend origins
+// CORS — allow verified frontend origins, Vercel deployments, and local dev
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   'https://resumeaipro.vercel.app',
@@ -43,7 +43,15 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       return callback(null, true)
     }
-    return callback(new Error('Cross-Origin Request Blocked by CORS Policy'))
+    // Allow any Vercel deployment of this project
+    if (origin.endsWith('.vercel.app') && (origin.includes('resumeai') || origin.includes('hritik'))) {
+      return callback(null, true)
+    }
+    // Allow local development ports
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      return callback(null, true)
+    }
+    return callback(null, false)
   },
   credentials: true,
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],

@@ -77,5 +77,7 @@ export const PLANS = {
  * Check if a plan key grants premium features.
  */
 export function isPaidPlan(planKey) {
-  return planKey === 'monthly' || planKey === 'yearly'
+  if (!planKey) return false
+  const p = String(planKey).toLowerCase().trim()
+  return p === 'monthly' || p === 'yearly' || p === 'pro' || p === 'pro_monthly' || p === 'pro_yearly' || p === 'lifetime' || p === 'enterprise' || p === 'starter'
 }

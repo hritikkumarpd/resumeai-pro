@@ -5,10 +5,11 @@
 import axios from 'axios'
 import { supabase } from './supabase'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+const rawApiBase = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/+$/, '')
+const API_BASE = rawApiBase.endsWith('/api') ? rawApiBase : `${rawApiBase}/api`
 
 const api = axios.create({
-  baseURL: `${API_BASE}/api`,
+  baseURL: API_BASE,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 })

@@ -81,8 +81,8 @@ function Hero() {
       <div className="absolute bottom-20 left-1/4 w-72 h-72 rounded-full opacity-15 pointer-events-none"
         style={{ background: 'rgba(34,211,238,.3)', filter: 'blur(80px)' }} />
 
-      <div className="max-w-[1200px] mx-auto px-6 w-full py-24">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full py-12 sm:py-24">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           {/* Left */}
           <div className="flex flex-col gap-7">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full w-fit text-xs font-semibold animate-fade-up"
@@ -111,7 +111,7 @@ function Hero() {
               </Link>
             </div>
 
-            <div className="flex items-center gap-8 flex-wrap animate-fade-up" style={{ animationDelay: '0.4s' }}>
+            <div className="flex items-center gap-4 sm:gap-8 flex-wrap animate-fade-up" style={{ animationDelay: '0.4s' }}>
               {[{ v: '100+', l: 'Users' }, { v: '90%', l: 'Interview Rate' }, { v: '10+', l: 'Templates' }, { v: '4.3★', l: 'Rating' }].map(s => (
                 <div key={s.l}>
                   <div className="font-heading font-extrabold text-2xl gradient-text">{s.v}</div>
@@ -123,7 +123,7 @@ function Hero() {
 
           {/* Right – floating resume card */}
           <div className="relative flex justify-center items-center animate-fade-up" style={{ animationDelay: '0.2s' }}>
-            <div className="relative w-[330px] h-[420px]">
+            <div className="relative w-full max-w-[330px] h-[420px]">
               {/* Resume mock - 100% Clean Black & White Indian ATS */}
               <div className="w-full h-full bg-white rounded-2xl overflow-hidden cursor-pointer transition-transform duration-500 p-5 flex flex-col font-sans"
                 style={{
@@ -199,7 +199,7 @@ function Hero() {
               </div>
 
               {/* ATS badge */}
-              <div className="absolute -right-8 top-6 animate-float-1 rounded-xl px-3 py-2 shadow-glow"
+              <div className="hidden sm:block absolute -right-8 top-6 animate-float-1 rounded-xl px-3 py-2 shadow-glow"
                 style={{ background: '#111338', border: '1px solid rgba(16,185,129,.4)' }}>
                 <div className="text-[10px] uppercase font-bold text-emerald-400">ATS Score</div>
                 <div className="font-heading font-extrabold text-2xl text-emerald-400">98%</div>
@@ -207,7 +207,7 @@ function Hero() {
               </div>
 
               {/* Indian Approved badge */}
-              <div className="absolute -left-12 bottom-16 animate-float-2 rounded-xl px-3 py-2 shadow-glow"
+              <div className="hidden sm:block absolute -left-12 bottom-16 animate-float-2 rounded-xl px-3 py-2 shadow-glow"
                 style={{ background: '#111338', border: '1px solid rgba(124,58,237,.4)', whiteSpace: 'nowrap' }}>
                 <div className="flex items-center gap-1.5">
                   <CheckCircle size={13} className="text-emerald-400" />
@@ -458,9 +458,9 @@ function FAQSection() {
 /* ── CTA Banner ─────────────────────────────────────────────── */
 function CTABanner() {
   return (
-    <section className="py-24">
-      <div className="max-w-[1200px] mx-auto px-6">
-        <div className="relative rounded-3xl p-14 text-center overflow-hidden reveal"
+    <section className="py-12 sm:py-24">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
+        <div className="relative rounded-3xl p-6 sm:p-10 lg:p-14 text-center overflow-hidden reveal"
           style={{ background: 'linear-gradient(135deg,rgba(124,58,237,.3),rgba(6,182,212,.15))', border: '1px solid rgba(124,58,237,.35)' }}>
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-52 rounded-full pointer-events-none opacity-30"
             style={{ background: 'rgba(124,58,237,.5)', filter: 'blur(80px)' }} />

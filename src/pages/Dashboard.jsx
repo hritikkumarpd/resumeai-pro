@@ -293,7 +293,7 @@ export default function Dashboard() {
   return (
     <div className={`flex min-h-screen pt-[72px] ${isLight ? 'bg-slate-50 text-slate-900' : 'bg-[#080920] text-white'}`}>
       {/* Sidebar */}
-      <aside className={`w-60 flex-shrink-0 border-r flex flex-col gap-1 px-3 py-6 sticky top-[72px] h-[calc(100vh-72px)] overflow-y-auto ${
+      <aside className={`w-60 flex-shrink-0 border-r hidden lg:flex lg:flex-col gap-1 px-3 py-6 sticky top-[72px] h-[calc(100vh-72px)] overflow-y-auto ${
         isLight ? 'bg-white border-slate-200' : 'bg-[#0D0F2E] border-purple-500/15'
       }`}>
         <div className="px-3 mb-4">
@@ -377,8 +377,59 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 px-6 lg:px-10 py-8 overflow-y-auto max-w-7xl mx-auto">
+      {/* Main Content Wrapper */}
+      <div className="flex-1 min-w-0 flex flex-col w-full">
+        {/* Mobile Navigation Pills / Tabs (< lg) */}
+        <div className={`lg:hidden border-b px-4 py-3 flex items-center gap-2 overflow-x-auto scrollbar-none sticky top-[72px] z-20 backdrop-blur-md ${
+          isLight ? 'bg-white/95 border-slate-200' : 'bg-[#0D0F2E]/95 border-purple-500/15'
+        }`}>
+          {navItems.map((item) => {
+            const isActive = item.isTab
+              ? activeTab === item.id
+              : false
+
+            if (item.isTab) {
+              return (
+                <button
+                  key={item.label}
+                  onClick={() => {
+                    if (item.id === 'settings') setSearchParams({ tab: 'settings' })
+                    else if (item.id === 'resumes') setSearchParams({ tab: 'resumes' })
+                    else setSearchParams({})
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 cursor-pointer ${
+                    isActive
+                      ? 'text-purple-400 bg-purple-500/20 border border-purple-500/30 font-semibold shadow-sm'
+                      : isLight
+                        ? 'text-slate-600 hover:text-slate-900 bg-slate-100'
+                        : 'text-slate-400 hover:text-slate-200 bg-white/5'
+                  }`}
+                >
+                  <item.icon size={13} />
+                  {item.label}
+                </button>
+              )
+            }
+
+            return (
+              <Link
+                key={item.label}
+                to={item.href}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+                  isLight
+                    ? 'text-slate-600 hover:text-slate-900 bg-slate-100'
+                    : 'text-slate-400 hover:text-slate-200 bg-white/5'
+                }`}
+              >
+                <item.icon size={13} />
+                {item.label}
+              </Link>
+            )
+          })}
+        </div>
+
+        {/* Main Content Area */}
+        <main className="flex-1 px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto max-w-7xl w-full mx-auto">
         {activeTab === 'settings' ? (
           /* ═════════════════════════════════════════════════════════════ */
           /* SETTINGS VIEW                                               */
@@ -434,7 +485,7 @@ export default function Dashboard() {
             )}
 
             {/* Sub-tabs: Resume Defaults vs Account */}
-            <div className="flex items-center gap-2 mb-6 border-b border-purple-500/20 pb-3">
+            <div className="flex items-center gap-2 mb-6 border-b border-purple-500/20 pb-3 overflow-x-auto scrollbar-none">
               <button
                 type="button"
                 onClick={() => setSettingsTab('resume_profile')}
@@ -767,7 +818,7 @@ export default function Dashboard() {
           /* ═════════════════════════════════════════════════════════════ */
           <div>
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
               <div>
                 <h1 className="font-heading font-bold text-2xl mb-1 flex items-center gap-2">
                   <FileText className="text-purple-400" /> My Resumes
@@ -776,7 +827,7 @@ export default function Dashboard() {
                   Manage, edit, export, and create new ATS-optimized resumes.
                 </p>
               </div>
-              <Link to="/builder" className="btn-primary gap-2 text-sm px-5 py-2.5 rounded-xl font-semibold shadow-lg shadow-purple-600/30 cursor-pointer">
+              <Link to="/builder" className="btn-primary gap-2 text-sm px-5 py-2.5 rounded-xl font-semibold shadow-lg shadow-purple-600/30 cursor-pointer self-start sm:self-auto">
                 <Plus size={16} /> Create New Resume
               </Link>
             </div>
@@ -947,17 +998,17 @@ export default function Dashboard() {
           /* ═════════════════════════════════════════════════════════════ */
           <div>
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
               <div>
                 <h1 className="font-heading font-bold text-2xl mb-1">
                   Welcome back, {firstName} 👋
                 </h1>
                 <p className={`text-sm ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Here's what's happening with your job search.</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 <button
                   onClick={() => setSearchParams({ tab: 'settings' })}
-                  className={`btn-ghost text-xs px-4 py-2.5 rounded-xl border flex items-center gap-1.5 transition-colors ${
+                  className={`btn-ghost text-xs px-4 py-2.5 rounded-xl border flex items-center gap-1.5 transition-colors cursor-pointer ${
                     isLight ? 'border-slate-300 text-slate-700 hover:bg-slate-100' : 'border-white/10 text-slate-300 hover:bg-white/5'
                   }`}
                 >
@@ -970,9 +1021,9 @@ export default function Dashboard() {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
               {computedStats.map(s => (
-                <div key={s.label} className={`p-5 rounded-2xl border transition-all hover:-translate-y-0.5 ${
+                <div key={s.label} className={`p-4 sm:p-5 rounded-2xl border transition-all hover:-translate-y-0.5 ${
                   isLight ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#111338] border-purple-500/20 shadow-lg'
                 }`}>
                   <div className="flex items-start justify-between mb-3">
@@ -992,7 +1043,7 @@ export default function Dashboard() {
 
             {/* Recently Made Resume Highlight */}
             {recentResumes.length > 0 && !loadingData && (
-              <div className={`mb-6 p-4 rounded-2xl border flex items-center gap-4 ${
+              <div className={`mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 ${
                 isLight ? 'bg-purple-50 border-purple-200' : 'bg-purple-500/10 border-purple-500/25'
               }`}>
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -1148,7 +1199,7 @@ export default function Dashboard() {
                           )}
                         </div>
 
-                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                           <Link to={`/builder?id=${r.id}`} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 transition-all cursor-pointer" title="Edit Resume">
                             <Edit2 size={13} />
                           </Link>
@@ -1235,6 +1286,7 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+      </div>
 
       {/* Delete confirmation overlay */}
       {deleteConfirm && (

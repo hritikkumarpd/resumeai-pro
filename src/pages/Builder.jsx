@@ -1087,7 +1087,7 @@ export default function Builder() {
   const [font, setFont] = useState('Times New Roman')
   const [template, setTemplate] = useState(templateFromUrl && TEMPLATES.includes(templateFromUrl) ? templateFromUrl : TEMPLATES[0])
   const [skillInput, setSkillInput] = useState('')
-  const [viewMode, setViewMode] = useState('split') // 'edit' | 'split' | 'preview'
+  const [viewMode, setViewMode] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 768) ? 'edit' : 'split') // 'edit' | 'split' | 'preview'
   const [zoom, setZoom] = useState(75) // 50% to 125%
   const [fontSizeScale, setFontSizeScale] = useState(1.0) // 0.8 to 1.25
   const [sectionOrder, setSectionOrder] = useState(DEFAULT_SECTION_ORDER)
@@ -1827,7 +1827,7 @@ export default function Builder() {
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ paddingTop: 72, background: isLight ? '#f8fafc' : '#080920' }}>
       {/* ── Global Sub-Header Bar (Template Selector, Font Size, View Mode, Zoom, Theme, Download) ── */}
-      <header className="px-4 py-2 border-b flex flex-wrap items-center justify-between gap-2.5 z-20 flex-shrink-0 transition-colors"
+      <header className="px-2.5 sm:px-4 py-2 border-b flex items-center justify-between gap-2 overflow-x-auto scrollbar-none z-20 flex-shrink-0 transition-colors"
               style={{ background: isLight ? '#ffffff' : '#0c0e29', borderColor: isLight ? '#e2e8f0' : 'rgba(124,58,237,.2)' }}>
         
         {/* Left: Resume Title / Name & Template / Font Selector */}
@@ -1848,7 +1848,7 @@ export default function Builder() {
               onChange={e => setResumeTitle(e.target.value)}
               placeholder="e.g. Data Science Resume"
               aria-label="Resume Name"
-              className={`text-xs font-bold bg-transparent outline-none border-none py-0.5 w-[140px] sm:w-[170px] md:w-[195px] truncate ${
+              className={`text-xs font-bold bg-transparent outline-none border-none py-0.5 w-[110px] sm:w-[150px] md:w-[195px] truncate ${
                 isLight ? 'text-slate-900 placeholder:text-slate-400' : 'text-white placeholder:text-slate-500'
               }`}
             />
@@ -1868,7 +1868,7 @@ export default function Builder() {
                       backgroundColor: 'transparent',
                       color: isLight ? '#0f172a' : '#f8fafc',
                     }}
-                    className="text-xs py-1.5 pr-2.5 pl-0.5 font-semibold w-auto max-w-[260px] md:max-w-[300px] truncate cursor-pointer outline-none border-none focus:ring-0 appearance-none bg-transparent">
+                    className="text-xs py-1.5 pr-2.5 pl-0.5 font-semibold w-auto max-w-[130px] sm:max-w-[200px] md:max-w-[300px] truncate cursor-pointer outline-none border-none focus:ring-0 appearance-none bg-transparent">
               {TEMPLATES.map(t => (
                 <option key={t} value={t} style={{ backgroundColor: isLight ? '#ffffff' : '#141842', color: isLight ? '#0f172a' : '#f8fafc', fontWeight: 500 }}>
                   {t}
@@ -1878,7 +1878,7 @@ export default function Builder() {
           </div>
 
           {/* Font Dropdown with Icon */}
-          <div className={`flex items-center gap-1.5 border rounded-lg shadow-sm transition-colors ${
+          <div className={`hidden sm:flex items-center gap-1.5 border rounded-lg shadow-sm transition-colors ${
             isLight ? 'bg-white border-slate-300' : 'bg-[#141842] border-purple-500/30'
           }`}>
             <Type size={13} className={`ml-2.5 flex-shrink-0 ${
@@ -1900,7 +1900,7 @@ export default function Builder() {
           </div>
 
           {/* Font Size Scaling Controls (A- / A+) */}
-          <div className={`flex items-center gap-1 border rounded-lg px-2 py-1 transition-colors ${
+          <div className={`hidden md:flex items-center gap-1 border rounded-lg px-2 py-1 transition-colors ${
             isLight ? 'bg-slate-100 border-slate-300' : 'bg-[#141740] border-purple-500/20'
           }`}
                title="Resume Font Size: Decrease (A-) or Increase (A+)">
@@ -1964,7 +1964,7 @@ export default function Builder() {
           {/* Theme Toggle Button */}
           <button onClick={toggleTheme}
                   title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                  className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg font-medium transition-all ${
+                  className={`hidden sm:flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg font-medium transition-all ${
                     isLight
                       ? 'bg-slate-100 hover:bg-slate-200 text-amber-600 border border-slate-300'
                       : 'bg-[#141740] hover:bg-[#1e235e] text-amber-400 border border-purple-500/20 shadow-inner'
@@ -1976,7 +1976,7 @@ export default function Builder() {
           {/* AI Active Badge (Server-side — no user configuration needed) */}
           <div
             title="AI Resume Intelligence Active (Powered by server-side AI)"
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 shadow-sm"
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 shadow-sm"
           >
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <Sparkles size={12} className="text-emerald-400" />
@@ -1984,7 +1984,7 @@ export default function Builder() {
           </div>
 
           {/* Zoom controls */}
-          <div className={`flex items-center gap-1 border rounded-lg px-2 py-1 transition-colors ${
+          <div className={`hidden xl:flex items-center gap-1 border rounded-lg px-2 py-1 transition-colors ${
             isLight ? 'bg-slate-100 border-slate-300' : 'bg-[#141740] border-purple-500/20'
           }`}>
             <button onClick={() => setZoom(z => Math.max(50, z - 10))} title="Zoom Out"
@@ -2051,7 +2051,7 @@ export default function Builder() {
           {/* Download PDF button */}
           <button onClick={handlePrint}
                   disabled={isGeneratingPdf}
-                  className="btn-primary text-xs px-3.5 py-1.5 rounded-lg gap-1.5 shadow-lg shadow-purple-600/20 font-semibold cursor-pointer disabled:opacity-75">
+                  className="btn-primary text-xs px-2.5 sm:px-3.5 py-1.5 rounded-lg gap-1 sm:gap-1.5 shadow-lg shadow-purple-600/20 font-semibold cursor-pointer disabled:opacity-75 whitespace-nowrap">
             {isGeneratingPdf ? (
               <>
                 <Sparkles size={13} className="animate-spin text-purple-200" />
@@ -2060,14 +2060,15 @@ export default function Builder() {
             ) : (
               <>
                 <Download size={13} />
-                <span>Download PDF</span>
+                <span className="hidden sm:inline">Download PDF</span>
+                <span className="sm:hidden">PDF</span>
               </>
             )}
           </button>
 
           {/* Free-plan export quota badge */}
           {user && !exportQuota.unlimited && (
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full select-none whitespace-nowrap ${
+            <span className={`hidden md:inline text-[10px] font-medium px-2 py-0.5 rounded-full select-none whitespace-nowrap ${
               exportQuota.used >= exportQuota.limit
                 ? (isLight ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-red-500/15 text-red-400 border border-red-500/25')
                 : (isLight ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-slate-700/50 text-slate-400 border border-slate-600/40')
@@ -2086,7 +2087,7 @@ export default function Builder() {
         
         {/* ── Left Editor Panel ── */}
         {(viewMode === 'edit' || viewMode === 'split') && (
-          <aside className={`flex flex-col border-r overflow-hidden flex-shrink-0 transition-all ${viewMode === 'edit' ? 'w-full max-w-3xl mx-auto border-none' : 'w-[400px]'}`}
+          <aside className={`flex flex-col border-r overflow-hidden flex-shrink-0 transition-all ${viewMode === 'edit' ? 'w-full max-w-3xl mx-auto border-none' : 'w-full md:w-[400px]'}`}
                  style={{
                    background: isLight ? '#f8fafc' : '#0D0F2E',
                    borderColor: isLight ? '#e2e8f0' : 'rgba(124,58,237,.2)'

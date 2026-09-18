@@ -34,10 +34,10 @@ const socials = [
 export default function Footer() {
   return (
     <footer className="bg-[#0D0F2E] border-t border-[#7C3AED]/20 pt-16 pb-8">
-      <div className="max-w-[1200px] mx-auto px-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 mb-12">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8 sm:gap-10 mb-12">
           {/* Brand */}
-          <div className="lg:col-span-2">
+          <div className="col-span-2 sm:col-span-3 lg:col-span-2">
             <Link to="/" className="flex items-center gap-2.5 mb-4">
               <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shadow-[0_0_16px_rgba(124,58,237,0.5)]"
                    style={{ background: 'linear-gradient(135deg,#7C3AED,#06B6D4)' }}>
@@ -95,7 +95,7 @@ export default function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="pt-8 border-t border-[#7C3AED]/15 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="pt-8 border-t border-[#7C3AED]/15 flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
           <p className="text-slate-600 text-sm">
             © {new Date().getFullYear()} ResumeAI Pro. All rights reserved.
           </p>

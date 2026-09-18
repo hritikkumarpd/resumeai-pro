@@ -413,7 +413,7 @@ export default function Admin() {
             ) : (
               <div className="divide-y divide-purple-500/10">
                 {stats.recent_users.map(u => (
-                  <div key={u.id} className="py-3 flex items-center justify-between gap-4">
+                  <div key={u.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-purple-500/20 text-purple-300 font-bold text-xs flex items-center justify-center">
                         {(u.full_name || 'U')[0].toUpperCase()}
@@ -445,7 +445,7 @@ export default function Admin() {
 
       {/* ── Tab 2: User Management Table ───────────────────────────── */}
       {activeTab === 'users' && (
-        <div className={`p-6 rounded-3xl border animate-fade-in ${
+        <div className={`p-4 sm:p-6 rounded-3xl border animate-fade-in ${
           isLight ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#111338] border-purple-500/20 shadow-xl'
         }`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -466,8 +466,8 @@ export default function Admin() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+            <table className="w-full text-left text-xs min-w-[600px]">
               <thead>
                 <tr className="border-b border-purple-500/20 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
                   <th className="pb-3 px-3">User</th>
@@ -538,14 +538,14 @@ export default function Admin() {
 
       {/* ── Tab 3: Resumes Audit Feed ──────────────────────────────── */}
       {activeTab === 'resumes' && (
-        <div className={`p-6 rounded-3xl border animate-fade-in ${
+        <div className={`p-4 sm:p-6 rounded-3xl border animate-fade-in ${
           isLight ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#111338] border-purple-500/20 shadow-xl'
         }`}>
           <h2 className="font-heading font-bold text-lg mb-2">Platform Resumes ({resumesList.length})</h2>
           <p className="text-xs text-slate-400 mb-6">Real-time audit of generated resumes across all users.</p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+            <table className="w-full text-left text-xs min-w-[550px]">
               <thead>
                 <tr className="border-b border-purple-500/20 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
                   <th className="pb-3 px-3">Title</th>

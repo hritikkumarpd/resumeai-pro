@@ -236,7 +236,7 @@ export default function AtsChecker() {
         <div className="absolute inset-0 bg-grid pointer-events-none opacity-50" />
         <div className="absolute inset-0 pointer-events-none"
              style={{ background: 'radial-gradient(ellipse at 50% 0%,rgba(34,211,238,.2) 0%,transparent 60%)' }} />
-        <div className="max-w-[1200px] mx-auto px-6 relative">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 relative">
           <div className="section-tag mb-4 mx-auto w-fit"><Target size={12} /> ATS Score Checker</div>
           <h1 className="font-heading font-extrabold mb-3" style={{ fontSize: 'clamp(2rem,4vw,3.5rem)' }}>
             How well does your resume <span className="gradient-text">match the job?</span>
@@ -249,7 +249,7 @@ export default function AtsChecker() {
 
       {/* Tool Inputs */}
       <section className="pb-24">
-        <div className="max-w-[1200px] mx-auto px-6">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
           {error && (
             <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -263,12 +263,14 @@ export default function AtsChecker() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Job Description */}
             <div className="rounded-2xl overflow-hidden" style={{ background: '#111338', border: '1px solid rgba(124,58,237,.25)' }}>
-              <div className="px-5 py-3.5 border-b flex items-center gap-2" style={{ borderColor: 'rgba(124,58,237,.2)', background: '#0D0F2E' }}>
-                <Target size={14} className="text-cyan-400" />
-                <span className="font-semibold text-sm">Job Description</span>
-                <span className="text-[11px] text-slate-400">(Optional for role matching)</span>
+              <div className="px-3.5 sm:px-5 py-3 border-b flex flex-wrap items-center justify-between gap-2" style={{ borderColor: 'rgba(124,58,237,.2)', background: '#0D0F2E' }}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Target size={14} className="text-cyan-400 flex-shrink-0" />
+                  <span className="font-semibold text-sm">Job Description</span>
+                  <span className="text-[11px] text-slate-400 hidden sm:inline">(Optional for role matching)</span>
+                </div>
                 <button onClick={() => jobFileRef.current?.click()}
-                        className="ml-auto flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
+                        className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer flex-shrink-0">
                   <Upload size={11} /> Upload PDF
                 </button>
                 <input ref={jobFileRef} type="file" accept=".pdf,.txt,.md" className="hidden" onChange={handleJobDescFile} disabled={uploading} />
@@ -284,14 +286,16 @@ export default function AtsChecker() {
 
             {/* Resume */}
             <div className="rounded-2xl overflow-hidden" style={{ background: '#111338', border: '1px solid rgba(124,58,237,.25)' }}>
-              <div className="px-5 py-3.5 border-b flex items-center gap-2" style={{ borderColor: 'rgba(124,58,237,.2)', background: '#0D0F2E' }}>
-                <BarChart2 size={14} className="text-purple-400" />
-                <span className="font-semibold text-sm">Your Resume</span>
-                <span className="text-[11px] text-emerald-400">● Required</span>
+              <div className="px-3.5 sm:px-5 py-3 border-b flex flex-wrap items-center justify-between gap-2" style={{ borderColor: 'rgba(124,58,237,.2)', background: '#0D0F2E' }}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <BarChart2 size={14} className="text-purple-400 flex-shrink-0" />
+                  <span className="font-semibold text-sm">Your Resume</span>
+                  <span className="text-[11px] text-emerald-400">● Required</span>
+                </div>
                 <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                        className="ml-auto flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50">
+                        className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50 cursor-pointer flex-shrink-0">
                   {uploading ? <RefreshCw size={11} className="animate-spin" /> : <Upload size={11} />}
-                  {uploading ? 'Processing...' : 'Upload PDF / Text'}
+                  <span>{uploading ? 'Processing...' : 'Upload PDF / Text'}</span>
                 </button>
                 <input ref={fileRef} type="file" accept=".pdf,.txt,.md" className="hidden" onChange={handleFile} disabled={uploading} />
               </div>
@@ -310,7 +314,7 @@ export default function AtsChecker() {
             <button
               onClick={analyze}
               disabled={scanning}
-              className="btn-primary px-10 py-4 rounded-xl text-base gap-3 disabled:opacity-60 cursor-pointer shadow-xl shadow-purple-600/25"
+              className="btn-primary px-6 sm:px-10 py-3.5 sm:py-4 rounded-xl text-sm sm:text-base gap-2.5 sm:gap-3 disabled:opacity-60 cursor-pointer shadow-xl shadow-purple-600/25"
             >
               {scanning
                 ? <><RefreshCw size={18} className="animate-spin" /> Analyzing your resume...</>

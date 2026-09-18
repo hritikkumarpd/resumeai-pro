@@ -4,6 +4,7 @@ const { supabaseAdmin } = require('../lib/supabase')
 const { isPaidPlan } = require('../config/plans')
 
 const fs = require('fs')
+const net = require('net')
 
 const FREE_EXPORT_LIMIT = 3
 
@@ -27,11 +28,160 @@ function getChromeExecutablePath() {
   return undefined
 }
 
+/* ── SSRF Security: Host & IP Validator ────────────────────────── */
+
+/**
+ * Validates if an IP address string belongs to private, loopback,
+ * link-local, carrier-grade NAT, multicast, or cloud metadata ranges.
+ */
+function isPrivateOrInternalIp(ipStr) {
+  if (!ipStr) return true
+
+  // Standard IPv4 check
+  if (net.isIPv4(ipStr)) {
+    const parts = ipStr.split('.').map(Number)
+    const [a, b] = parts
+    // 0.0.0.0/8 (Current network)
+    if (a === 0) return true
+    // 10.0.0.0/8 (Private)
+    if (a === 10) return true
+    // 127.0.0.0/8 (Loopback)
+    if (a === 127) return true
+    // 169.254.0.0/16 (Link-local / AWS & GCP Cloud Metadata)
+    if (a === 169 && b === 254) return true
+    // 172.16.0.0/12 (Private)
+    if (a === 172 && b >= 16 && b <= 31) return true
+    // 192.168.0.0/16 (Private)
+    if (a === 192 && b === 168) return true
+    // 100.64.0.0/10 (Shared Address Space / CGNAT)
+    if (a === 100 && b >= 64 && b <= 127) return true
+    // 192.0.0.0/24 & 192.0.2.0/24 (Documentation / Special)
+    if (a === 192 && b === 0) return true
+    // 198.51.100.0/24 & 203.0.113.0/24
+    if (a === 198 && (b === 18 || b === 19 || b === 51)) return true
+    if (a === 203 && b === 0) return true
+    // 224.0.0.0/4 (Multicast) or 240.0.0.0/4 (Reserved / Future Use)
+    if (a >= 224) return true
+    return false
+  }
+
+  // Standard IPv6 check
+  if (net.isIPv6(ipStr)) {
+    const norm = ipStr.toLowerCase()
+    // Loopback ::1 / ::
+    if (norm === '::1' || norm === '0:0:0:0:0:0:0:1' || norm === '::') return true
+    // Unique local address fc00::/7 (fc00 - fdff)
+    if (norm.startsWith('fc') || norm.startsWith('fd')) return true
+    // Link-local unicast fe80::/10
+    if (norm.startsWith('fe8') || norm.startsWith('fe9') || norm.startsWith('fea') || norm.startsWith('feb')) return true
+    // IPv4-mapped IPv6 address (e.g. ::ffff:127.0.0.1)
+    if (norm.includes('::ffff:')) {
+      const v4Part = norm.split('::ffff:')[1]
+      return isPrivateOrInternalIp(v4Part)
+    }
+    return false
+  }
+
+  return false
+}
+
+/**
+ * Checks if a hostname or integer/hex/octal representation resolves to an internal/private host.
+ */
+function isDisallowedHost(rawHost) {
+  if (!rawHost) return true
+
+  // Strip IPv6 brackets and optional port
+  let host = rawHost.trim().toLowerCase()
+  if (host.startsWith('[') && host.includes(']')) {
+    host = host.slice(1, host.indexOf(']'))
+  } else {
+    host = host.split(':')[0]
+  }
+
+  // Known metadata / internal domain patterns
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host.endsWith('.internal') ||
+    host === 'metadata.google.internal' ||
+    host === 'instance-data' ||
+    host === 'metadata'
+  ) {
+    return true
+  }
+
+  // Check if raw host is a standard dot/colon IP string
+  if (isPrivateOrInternalIp(host)) {
+    return true
+  }
+
+  // Check if host is in numeric format (decimal integer, hex 0x..., octal)
+  // Example: 2130706433 = 127.0.0.1, 0x7f000001 = 127.0.0.1
+  let numVal = null
+  if (/^0x[0-9a-f]+$/i.test(host)) {
+    numVal = parseInt(host, 16)
+  } else if (/^\d+$/.test(host)) {
+    numVal = host.startsWith('0') && host.length > 1 ? parseInt(host, 8) : parseInt(host, 10)
+  }
+
+  if (numVal !== null && !isNaN(numVal)) {
+    if (numVal >= 0 && numVal <= 0xffffffff) {
+      const a = (numVal >>> 24) & 0xff
+      const b = (numVal >>> 16) & 0xff
+      const c = (numVal >>> 8) & 0xff
+      const d = numVal & 0xff
+      const reconstructedIp = `${a}.${b}.${c}.${d}`
+      return isPrivateOrInternalIp(reconstructedIp)
+    }
+    return true // Block out-of-bounds integer hostnames
+  }
+
+  return false
+}
+
+/**
+ * Determine if an intercepted Puppeteer request is safe.
+ * Restricts resource types to static presentation assets (no scripts, xhr, fetch, websockets, frames).
+ */
+function isSafePuppeteerRequest(interceptedReq) {
+  const resourceType = interceptedReq.resourceType()
+  const allowedResourceTypes = ['document', 'stylesheet', 'image', 'font']
+  if (!allowedResourceTypes.includes(resourceType)) {
+    return false
+  }
+
+  const rawUrl = (interceptedReq.url() || '').trim()
+  if (!rawUrl) return false
+
+  // Allow inline images
+  if (rawUrl.startsWith('data:image/')) return true
+  if (rawUrl.startsWith('data:')) return false // block other data schemes
+
+  let parsedUrl
+  try {
+    parsedUrl = new URL(rawUrl)
+  } catch {
+    return false
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return false
+  }
+
+  if (isDisallowedHost(parsedUrl.hostname)) {
+    return false
+  }
+
+  return true
+}
+
 /* ── Quota helpers (atomic Supabase RPC) ───────────────────────── */
 
 /**
  * Check + atomically increment the free-plan user's monthly export count.
- * Returns { allowed, used, limit, month } or null if user is paid/error.
+ * Returns { allowed, used, limit, month } or null if error.
  */
 async function checkAndIncrementQuota(userId) {
   try {
@@ -41,12 +191,40 @@ async function checkAndIncrementQuota(userId) {
     })
     if (error) {
       console.error('increment_export_usage RPC error:', error.message)
-      return null // fail-open: allow export if RPC fails
+      return null
     }
     return data
   } catch (err) {
     console.error('Quota check failed:', err.message)
-    return null // fail-open
+    return null
+  }
+}
+
+/**
+ * Rollback quota reservation if PDF generation unexpectedly fails.
+ */
+async function rollbackQuota(userId) {
+  try {
+    const monthKey = new Date().toISOString().slice(0, 7) // 'YYYY-MM'
+    const { data: usage } = await supabaseAdmin
+      .from('monthly_usage')
+      .select('export_count')
+      .eq('user_id', userId)
+      .eq('month_key', monthKey)
+      .maybeSingle()
+
+    if (usage && usage.export_count > 0) {
+      await supabaseAdmin
+        .from('monthly_usage')
+        .update({
+          export_count: usage.export_count - 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .eq('month_key', monthKey)
+    }
+  } catch (err) {
+    console.warn('Quota rollback failed:', err.message)
   }
 }
 
@@ -120,21 +298,26 @@ router.post('/render-html', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Resume HTML exceeds maximum allowed size (2MB).' })
   }
 
-  // ── Quota: PRE-CHECK for free-plan users (read-only, no increment yet) ──
+  // ── Quota: ATOMIC PRE-INCREMENT for free-plan users ──
+  // Checks and reserves quota slot BEFORE slow PDF generation (fixes TOCTOU race condition RESUMEAI-003)
   const userPlan = req.profile?.plan || 'free'
   const isFreeUser = !isPaidPlan(userPlan)
+  let quotaReserved = false
+
   if (isFreeUser) {
-    const currentUsage = await getQuota(req.user.id)
-    if (currentUsage && currentUsage.used >= FREE_EXPORT_LIMIT) {
+    const quotaResult = await checkAndIncrementQuota(req.user.id)
+    if (!quotaResult || quotaResult.allowed === false) {
+      const currentUsed = quotaResult?.used ?? FREE_EXPORT_LIMIT
       return res.status(429).json({
-        error: `Monthly export limit reached (${currentUsage.used}/${currentUsage.limit}). Upgrade to Pro for unlimited exports.`,
-        used: currentUsage.used,
-        limit: currentUsage.limit,
-        month: currentUsage.month,
+        error: `Monthly export limit reached (${currentUsed}/${FREE_EXPORT_LIMIT}). Upgrade to Pro for unlimited exports.`,
+        used: currentUsed,
+        limit: FREE_EXPORT_LIMIT,
+        month: quotaResult?.month || new Date().toISOString().slice(0, 7),
         resets_at: getQuotaResetDate(),
         upgrade_url: `${(process.env.FRONTEND_URL || 'https://resumeaihritik.vercel.app').replace(/\/+$/, '')}/pricing`,
       })
     }
+    quotaReserved = true
   }
 
   let browser = null
@@ -155,21 +338,16 @@ router.post('/render-html', requireAuth, async (req, res) => {
 
     const page = await browser.newPage()
 
-    // Block SSRF to cloud metadata (169.254.169.254), loopback interfaces, and local files
+    // Disable client-side JavaScript execution inside PDF renderer (fixes RESUMEAI-002)
+    await page.setJavaScriptEnabled(false)
+
+    // Intercept and strictly block SSRF to cloud metadata, private IPs, decimal/hex IPs, and non-media assets
     await page.setRequestInterception(true)
     page.on('request', (interceptedReq) => {
-      const url = (interceptedReq.url() || '').toLowerCase()
-      if (
-        url.startsWith('file:') ||
-        url.includes('169.254.169.254') ||
-        url.includes('metadata.google.internal') ||
-        url.includes('127.0.0.1') ||
-        url.includes('localhost') ||
-        url.includes('0.0.0.0')
-      ) {
-        interceptedReq.abort()
-      } else {
+      if (isSafePuppeteerRequest(interceptedReq)) {
         interceptedReq.continue()
+      } else {
+        interceptedReq.abort()
       }
     })
 
@@ -189,18 +367,6 @@ router.post('/render-html', requireAuth, async (req, res) => {
     await browser.close()
     browser = null
 
-    // ── Quota: INCREMENT only AFTER successful PDF generation ──
-    // This prevents consuming a quota slot when Puppeteer crashes/times out
-    if (isFreeUser) {
-      const quotaResult = await checkAndIncrementQuota(req.user.id)
-      // If a concurrent request snuck in and exhausted the quota between
-      // our pre-check and this increment, the RPC will roll back the increment
-      // and return allowed=false. But the PDF was already generated, so we
-      // still serve it this time (the next request will be blocked).
-      // This is a deliberate fail-open for the current request to avoid
-      // generating a PDF and then throwing it away.
-    }
-
     const safeName = (name || 'Resume').replace(/[^a-zA-Z0-9_-]/g, '_')
     res.set({
       'Content-Type': 'application/pdf',
@@ -210,6 +376,10 @@ router.post('/render-html', requireAuth, async (req, res) => {
     res.end(pdf)
   } catch (err) {
     if (browser) await browser.close().catch(() => {})
+    // Roll back quota reservation if PDF generation failed
+    if (quotaReserved) {
+      await rollbackQuota(req.user.id)
+    }
     console.error('PDF render-html error:', err)
     res.status(500).json({ error: 'PDF generation failed: ' + err.message })
   }
@@ -227,21 +397,25 @@ router.post('/generate', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Resume data with personal info is required.' })
   }
 
-  // ── Quota: PRE-CHECK for free-plan users (read-only, no increment yet) ──
+  // ── Quota: ATOMIC PRE-INCREMENT for free-plan users ──
   const userPlan = req.profile?.plan || 'free'
   const isFreeUser = !isPaidPlan(userPlan)
+  let quotaReserved = false
+
   if (isFreeUser) {
-    const currentUsage = await getQuota(req.user.id)
-    if (currentUsage && currentUsage.used >= FREE_EXPORT_LIMIT) {
+    const quotaResult = await checkAndIncrementQuota(req.user.id)
+    if (!quotaResult || quotaResult.allowed === false) {
+      const currentUsed = quotaResult?.used ?? FREE_EXPORT_LIMIT
       return res.status(429).json({
-        error: `Monthly export limit reached (${currentUsage.used}/${currentUsage.limit}). Upgrade to Pro for unlimited exports.`,
-        used: currentUsage.used,
-        limit: currentUsage.limit,
-        month: currentUsage.month,
+        error: `Monthly export limit reached (${currentUsed}/${FREE_EXPORT_LIMIT}). Upgrade to Pro for unlimited exports.`,
+        used: currentUsed,
+        limit: FREE_EXPORT_LIMIT,
+        month: quotaResult?.month || new Date().toISOString().slice(0, 7),
         resets_at: getQuotaResetDate(),
         upgrade_url: `${(process.env.FRONTEND_URL || 'https://resumeaihritik.vercel.app').replace(/\/+$/, '')}/pricing`,
       })
     }
+    quotaReserved = true
   }
 
   // Build HTML for the resume with active hyperlinks
@@ -259,20 +433,16 @@ router.post('/generate', requireAuth, async (req, res) => {
 
     const page = await browser.newPage()
 
+    // Disable client-side JavaScript execution
+    await page.setJavaScriptEnabled(false)
+
+    // Intercept and block SSRF
     await page.setRequestInterception(true)
     page.on('request', (interceptedReq) => {
-      const url = (interceptedReq.url() || '').toLowerCase()
-      if (
-        url.startsWith('file:') ||
-        url.includes('169.254.169.254') ||
-        url.includes('metadata.google.internal') ||
-        url.includes('127.0.0.1') ||
-        url.includes('localhost') ||
-        url.includes('0.0.0.0')
-      ) {
-        interceptedReq.abort()
-      } else {
+      if (isSafePuppeteerRequest(interceptedReq)) {
         interceptedReq.continue()
+      } else {
+        interceptedReq.abort()
       }
     })
 
@@ -288,11 +458,6 @@ router.post('/generate', requireAuth, async (req, res) => {
     await browser.close()
     browser = null
 
-    // ── Quota: INCREMENT only AFTER successful PDF generation ──
-    if (isFreeUser) {
-      await checkAndIncrementQuota(req.user.id)
-    }
-
     const name = (resumeData.personal?.name || 'Resume').replace(/[^a-zA-Z0-9]/g, '_')
     res.set({
       'Content-Type':        'application/pdf',
@@ -303,6 +468,9 @@ router.post('/generate', requireAuth, async (req, res) => {
 
   } catch (err) {
     if (browser) await browser.close().catch(() => {})
+    if (quotaReserved) {
+      await rollbackQuota(req.user.id)
+    }
     console.error('PDF generation error:', err)
     res.status(500).json({ error: 'PDF generation failed. Please try again.' })
   }

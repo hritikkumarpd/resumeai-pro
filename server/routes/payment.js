@@ -8,35 +8,23 @@ const { PLANS, getPlan, isPaidPlan, resolvePlanKey } = require('../config/plans'
 
 /* ── POST /api/payment/create-order ────────────────────────── */
 async function handleCreateOrder(req, res) {
-  const { plan, amount, currency, receipt } = req.body
+  const { plan, receipt } = req.body
 
-  let orderAmount = 0
-  let orderCurrency = currency || 'INR'
-  let orderPlan = null
-  let planLabel = 'ResumeAI Pro Upgrade'
-
-  if (plan) {
-    if (!isPaidPlan(plan)) {
-      return res.status(400).json({
-        error: `Invalid plan: ${plan}. Valid paid plans: monthly, yearly`,
-      })
-    }
-    const planConfig = getPlan(plan)
-    if (!planConfig) {
-      return res.status(400).json({ error: 'Plan configuration not found.' })
-    }
-    orderAmount = planConfig.paise
-    orderCurrency = planConfig.currency || 'INR'
-    orderPlan = plan
-    planLabel = planConfig.label
-  } else if (amount) {
-    orderAmount = parseInt(amount, 10)
+  if (!plan || !isPaidPlan(plan)) {
+    return res.status(400).json({
+      error: `Valid paid plan required ('monthly' or 'yearly'). Received: ${plan || 'none'}`,
+    })
   }
 
-  // Minimum amount validation: 100 paise (₹1)
-  if (!orderAmount || isNaN(orderAmount) || orderAmount < 100) {
-    return res.status(400).json({ error: 'Amount must be at least 100 paise (₹1).' })
+  const resolvedPlanKey = resolvePlanKey(plan)
+  const planConfig = getPlan(resolvedPlanKey)
+  if (!planConfig || !planConfig.paise) {
+    return res.status(400).json({ error: 'Plan configuration not found.' })
   }
+
+  const orderAmount = planConfig.paise
+  const orderCurrency = planConfig.currency || 'INR'
+  const planLabel = planConfig.label
 
   // Pre-flight check: Ensure Razorpay credentials are set in environment
   const keyId = process.env.RAZORPAY_KEY_ID
@@ -58,7 +46,7 @@ async function handleCreateOrder(req, res) {
       receipt:  orderReceipt,
       notes: {
         supabase_user_id: req.user?.id || null,
-        plan: orderPlan,
+        plan: resolvedPlanKey,
       },
     })
 
@@ -87,7 +75,6 @@ async function handleVerifyPayment(req, res) {
   const orderId   = req.body.razorpay_order_id   || req.body.order_id
   const paymentId = req.body.razorpay_payment_id || req.body.payment_id
   const signature = req.body.razorpay_signature  || req.body.signature
-  const plan      = req.body.plan
 
   // Validate required fields
   if (!orderId || !paymentId || !signature) {
@@ -145,29 +132,65 @@ async function handleVerifyPayment(req, res) {
     }
   }
 
-  // 3. Security: Fetch order details directly from Razorpay if plan is specified
-  //    Resolve aliases (pro_monthly -> monthly) before anything else
-  let verifiedPlanKey = resolvePlanKey(plan) || plan
-  let orderAmount = 0
-  if (verifiedPlanKey) {
-    try {
-      const rzpOrder = await razorpay.orders.fetch(orderId)
-      if (rzpOrder) {
-        const trustedPlanKey = resolvePlanKey(rzpOrder.notes?.plan) || resolvePlanKey(plan) || plan
-        const trustedPlan = getPlan(trustedPlanKey)
-        if (trustedPlan && isPaidPlan(trustedPlanKey)) {
-          verifiedPlanKey = trustedPlanKey
-          orderAmount = rzpOrder.amount
-        }
-      }
-    } catch (rzpErr) {
-      console.warn('Razorpay order fetch failed (using client-supplied plan):', rzpErr?.message)
-      // Non-fatal: fall back to client-supplied plan key
+  // 3. Security: Fetch order details directly from Razorpay to verify plan and amount
+  let rzpOrder = null
+  try {
+    rzpOrder = await razorpay.orders.fetch(orderId)
+  } catch (rzpErr) {
+    console.error('Failed to fetch Razorpay order for verification:', rzpErr.message)
+    return res.status(400).json({
+      success: false,
+      error: 'Could not fetch order from payment gateway. Verification failed.',
+    })
+  }
+
+  if (!rzpOrder) {
+    return res.status(400).json({ success: false, error: 'Order not found in payment gateway.' })
+  }
+
+  // Determine trusted plan from Razorpay order notes (NEVER blindly trust client-supplied req.body.plan)
+  let orderPlanKey = resolvePlanKey(rzpOrder.notes?.plan)
+
+  // Fallback for legacy orders: match strictly by amount paid
+  if (!orderPlanKey) {
+    if (rzpOrder.amount === PLANS.yearly.paise) {
+      orderPlanKey = 'yearly'
+    } else if (rzpOrder.amount === PLANS.monthly.paise) {
+      orderPlanKey = 'monthly'
     }
   }
 
+  const planConfig = getPlan(orderPlanKey)
+  if (!planConfig || !isPaidPlan(orderPlanKey)) {
+    console.error('Payment verification rejected: no valid paid plan linked to order', {
+      orderId,
+      notes: rzpOrder.notes,
+      amount: rzpOrder.amount,
+    })
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid order: No recognized subscription plan associated with this order.',
+    })
+  }
+
+  // Enforce that paid amount is at least the required price for this plan
+  if (rzpOrder.amount < planConfig.paise) {
+    console.error('Payment price mismatch detected (tampering attempt):', {
+      orderId,
+      paidAmount: rzpOrder.amount,
+      expectedAmount: planConfig.paise,
+      plan: orderPlanKey,
+    })
+    return res.status(400).json({
+      success: false,
+      error: 'Payment verification failed: Paid amount does not meet plan price.',
+    })
+  }
+
+  const resolvedPlan = orderPlanKey
+  const orderAmount = rzpOrder.amount
+
   // 4. Record payment and update subscription if user is authenticated
-  const resolvedPlan = resolvePlanKey(verifiedPlanKey) || 'monthly'
   if (req.user?.id) {
     try {
       // 4a. Insert payment ledger record
@@ -298,7 +321,8 @@ router.post('/webhook', async (req, res) => {
       const userId = payment.notes?.supabase_user_id
       const planKey = payment.notes?.plan
       const resolvedWebhookPlan = resolvePlanKey(planKey)
-      if (userId && resolvedWebhookPlan && isPaidPlan(resolvedWebhookPlan)) {
+      const planConfig = getPlan(resolvedWebhookPlan)
+      if (userId && resolvedWebhookPlan && isPaidPlan(resolvedWebhookPlan) && planConfig && (!payment.amount || payment.amount >= planConfig.paise)) {
         // Update profile (same as verify endpoint, serves as backup)
         const now = new Date()
         let expiresAt = new Date(now)
@@ -310,6 +334,8 @@ router.post('/webhook', async (req, res) => {
           updated_at:          now.toISOString(),
         }).eq('id', userId)
         if (whProfileErr) console.error('Webhook profile update error:', whProfileErr)
+      } else if (payment.amount && planConfig && payment.amount < planConfig.paise) {
+        console.warn('Webhook ignored underpaid payment:', payment.id, 'paid:', payment.amount, 'required:', planConfig.paise)
       }
     }
   } else if (eventType === 'payment.failed') {

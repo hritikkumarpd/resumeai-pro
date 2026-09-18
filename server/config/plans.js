@@ -56,23 +56,37 @@ const PLANS = {
 }
 
 /**
- * Plan key aliases for backward compatibility with older deployments
+ * Plan key aliases for backward compatibility with older deployments and variations
  */
 const PLAN_ALIASES = {
+  pro: 'monthly',
   pro_monthly: 'monthly',
-  pro_yearly:  'yearly',
-  lifetime:    'yearly',
+  'pro monthly': 'monthly',
+  promonthly: 'monthly',
+  'pro-monthly': 'monthly',
+  pro_plan: 'monthly',
+  'pro plan': 'monthly',
+  pro_yearly: 'yearly',
+  'pro yearly': 'yearly',
+  proyearly: 'yearly',
+  'pro-yearly': 'yearly',
+  lifetime: 'yearly',
+  enterprise: 'yearly',
+  starter: 'monthly',
 }
 
 function resolvePlanKey(key) {
   if (!key) return null
-  return PLAN_ALIASES[key] || key
+  const str = String(key).trim()
+  const lower = str.toLowerCase()
+  const normalized = lower.replace(/[\s-]+/g, '_')
+  return PLAN_ALIASES[normalized] || PLAN_ALIASES[lower] || PLAN_ALIASES[str] || (PLANS[normalized] ? normalized : lower)
 }
 
 /**
  * Valid paid plan keys (excludes 'free')
  */
-const PAID_PLAN_KEYS = ['monthly', 'yearly', 'pro_monthly', 'pro_yearly', 'lifetime']
+const PAID_PLAN_KEYS = ['monthly', 'yearly', 'pro', 'pro_monthly', 'pro_yearly', 'lifetime', 'enterprise', 'starter']
 
 /**
  * Look up plan config by key. Returns null if invalid.
@@ -86,6 +100,7 @@ function getPlan(key) {
  * Check if a plan key is a paid (premium) plan.
  */
 function isPaidPlan(planKey) {
+  if (!planKey) return false
   const resolved = resolvePlanKey(planKey)
   return resolved === 'monthly' || resolved === 'yearly'
 }

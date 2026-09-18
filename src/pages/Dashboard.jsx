@@ -13,6 +13,7 @@ import { useTheme } from '../context/ThemeContext'
 import { supabase } from '../lib/supabase'
 import { resumeApi, coverLetterApi } from '../lib/api'
 import { resumeStorage } from '../lib/resumeStorage'
+import { resolvePlanKey } from '../config/plans'
 
 const navItems = [
   { id: 'dashboard',   icon: LayoutDashboard, label: 'Dashboard',    isTab: true },
@@ -80,7 +81,8 @@ export default function Dashboard() {
   const firstName = fullName ? fullName.trim().split(' ')[0] : (user?.email ? user.email.split('@')[0] : 'Professional')
   const displayName = fullName || (user?.email ? user.email.split('@')[0] : 'User')
   const userInitial = (firstName || 'U')[0].toUpperCase()
-  const planLabel = (profile?.plan === 'yearly') ? 'Pro Yearly' : (profile?.plan === 'monthly') ? 'Pro Monthly' : (profile?.plan === 'lifetime' ? 'Lifetime Pro' : (profile?.plan === 'pro' ? 'Pro Plan' : 'Free Plan'))
+  const resolvedUserPlan = resolvePlanKey(profile?.plan)
+  const planLabel = (resolvedUserPlan === 'yearly') ? 'Pro Yearly' : (resolvedUserPlan === 'monthly') ? 'Pro Monthly' : (profile?.plan === 'lifetime' ? 'Lifetime Pro' : 'Free Plan')
 
   // ── Real Data State ──────────────────────────────────────────
   const [resumes, setResumes] = useState([])

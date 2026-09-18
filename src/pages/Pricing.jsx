@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { CheckCircle, ArrowRight, Zap, Award, Star, Loader2, Check, AlertCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { paymentApi } from '../lib/api'
-import { PLANS } from '../config/plans'
+import { PLANS, resolvePlanKey } from '../config/plans'
 
 const plansList = [
   PLANS.free,
@@ -192,7 +192,8 @@ export default function Pricing() {
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {plansList.map(plan => {
-              const isCurrentPlan = profile?.plan === plan.key || (!profile?.plan && plan.key === 'free')
+              const userPlanKey = resolvePlanKey(profile?.plan) || (profile?.plan ? String(profile.plan).toLowerCase() : 'free')
+              const isCurrentPlan = userPlanKey === plan.key || (!profile?.plan && plan.key === 'free')
               const isFree = plan.key === 'free'
 
               return (

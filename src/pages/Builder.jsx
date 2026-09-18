@@ -16,6 +16,7 @@ import {
   enhanceSectionWithAI,
 } from '../lib/aiService'
 import { resumeApi, pdfApi } from '../lib/api'
+import { isPaidPlan } from '../config/plans'
 import { resumeStorage } from '../lib/resumeStorage'
 import { useScreenshotProtection } from '../hooks/useScreenshotProtection'
 
@@ -1142,7 +1143,7 @@ export default function Builder() {
     if (!user) return
 
     // Fast-path: if frontend context already knows user is Paid, skip API
-    if (profile?.plan === 'monthly' || profile?.plan === 'yearly') {
+    if (isPaidPlan(profile?.plan)) {
       setExportQuota({ plan: profile.plan, unlimited: true, used: 0, limit: Infinity })
       return
     }
@@ -1713,11 +1714,19 @@ export default function Builder() {
         // Handle quota exceeded (429)
         if (apiErr.response?.status === 429) {
           setIsGeneratingPdf(false)
-          const errData = apiErr.response.data
+          let errData = apiErr.response.data
+          if (errData instanceof Blob) {
+            try {
+              const text = await errData.text()
+              errData = JSON.parse(text)
+            } catch {
+              errData = {}
+            }
+          }
           setExportQuota(prev => ({
             ...prev,
-            used: errData.used || prev.used,
-            limit: errData.limit || prev.limit,
+            used: (errData && errData.used !== undefined) ? errData.used : prev.used,
+            limit: (errData && errData.limit !== undefined) ? errData.limit : prev.limit,
           }))
           setShowUpgradeModal(true)
           return

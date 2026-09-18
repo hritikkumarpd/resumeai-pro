@@ -34,5 +34,6 @@ server/.env
 .claude/
 agent/
 skills-lock.json
+SECURITY-AUDIT-*.md
 
 .vercel

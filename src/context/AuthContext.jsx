@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { authApi } from '../lib/api'
-import { isPaidPlan } from '../config/plans'
+import { isPaidPlan, resolvePlanKey } from '../config/plans'
 
 const AuthContext = createContext(null)
 
@@ -239,9 +239,9 @@ export function AuthProvider({ children }) {
     loading,
     isAuthenticated: !!user,
     isPro:           isPaidPlan(profile?.plan),
-    isMonthly:       profile?.plan === 'monthly',
-    isYearly:        profile?.plan === 'yearly',
-    plan:            profile?.plan || 'free',
+    isMonthly:       resolvePlanKey(profile?.plan) === 'monthly',
+    isYearly:        resolvePlanKey(profile?.plan) === 'yearly',
+    plan:            resolvePlanKey(profile?.plan) || 'free',
     signUp,
     signIn,
     signInWithGoogle,

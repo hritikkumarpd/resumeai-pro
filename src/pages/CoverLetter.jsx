@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Sparkles, Copy, Download, RefreshCw, Mail, CheckCircle, Save, CheckCircle2 } from 'lucide-react'
-import { generateCoverLetterWithAI } from '../lib/aiService'
+import { streamCoverLetterWithAI } from '../lib/aiService'
 import { useAuth } from '../context/AuthContext'
 import { coverLetterApi } from '../lib/api'
 
@@ -81,38 +81,49 @@ export default function CoverLetter() {
     setSaved(false)
     setLetter('')
     setLastForm(data)
-    
-    let full = await generateCoverLetterWithAI({ ...data, tone })
-    if (full) {
-      setIsAi(true)
-    } else {
+    setIsAi(true)
+
+    try {
+      let accumulated = ''
+      await streamCoverLetterWithAI({ ...data, tone }, {
+        onChunk: (chunk) => {
+          accumulated += chunk
+          setLetter(accumulated)
+        },
+        onDone: (result, fullText) => {
+          const finalLetter = fullText || result?.letter || accumulated
+          setLetter(finalLetter)
+          setGenerating(false)
+          setGenerated(true)
+
+          // Automatically persist to user's dashboard if logged in
+          if (user) {
+            coverLetterApi.create({
+              title: `${data.role || 'Job'} Cover Letter (${data.company || 'General'})`,
+              content: finalLetter,
+              job_role: data.role || '',
+              company: data.company || '',
+              tone,
+            }).then(() => setSaved(true))
+              .catch(saveErr => console.warn('Auto-save cover letter skipped:', saveErr?.message))
+          }
+        },
+        onError: (err) => {
+          console.warn('Streaming error, using template fallback:', err.message)
+          setIsAi(false)
+          const fallback = generateLetter({ ...data, tone })
+          setLetter(fallback)
+          setGenerating(false)
+          setGenerated(true)
+        }
+      })
+    } catch (err) {
+      console.warn('Cover letter generation exception:', err.message)
       setIsAi(false)
-      full = generateLetter({ ...data, tone })
-    }
-
-    // Typewriter effect
-    for (let i = 0; i <= full.length; i += 6) {
-      await new Promise(r => setTimeout(r, 8))
-      setLetter(full.slice(0, i))
-    }
-    setLetter(full)
-    setGenerating(false)
-    setGenerated(true)
-
-    // Automatically persist to user's dashboard if logged in
-    if (user) {
-      try {
-        await coverLetterApi.create({
-          title: `${data.role || 'Job'} Cover Letter (${data.company || 'General'})`,
-          content: full,
-          job_role: data.role || '',
-          company: data.company || '',
-          tone,
-        })
-        setSaved(true)
-      } catch (saveErr) {
-        console.warn('Auto-save cover letter skipped:', saveErr?.message)
-      }
+      const fallback = generateLetter({ ...data, tone })
+      setLetter(fallback)
+      setGenerating(false)
+      setGenerated(true)
     }
   }
 
@@ -236,7 +247,20 @@ export default function CoverLetter() {
 
             {/* Output */}
             <div className="lg:col-span-3">
-              {/* Toolbar */}
+              {/* Toolbar & Live Streaming Indicator */}
+              {generating && (
+                <div className="flex items-center gap-2.5 mb-3 bg-purple-950/50 border border-purple-500/30 rounded-xl px-4 py-2.5 shadow-lg backdrop-blur-sm">
+                  <Sparkles size={14} className="text-cyan-400 animate-spin" />
+                  <span className="text-xs text-purple-200 font-medium tracking-wide">
+                    ✨ Streaming live from Google Gemini AI...
+                  </span>
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <span className="text-[11px] text-cyan-300 font-mono">LIVE</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  </div>
+                </div>
+              )}
+
               {generated && (
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <span className="text-xs text-slate-400 flex items-center gap-1.5 mr-auto">
@@ -297,12 +321,16 @@ export default function CoverLetter() {
                       <div className="absolute top-0 left-0 right-0 h-0.5"
                            style={{ background: 'linear-gradient(90deg,#7C3AED,#06B6D4)', animation: 'shimmer 1s linear infinite', backgroundSize: '200%' }} />
                     )}
-                    <pre className={`font-sans text-slate-200 text-sm leading-relaxed whitespace-pre-wrap ${generating ? 'blink-cursor' : ''}`}>
+                    <pre className="font-sans text-slate-200 text-sm leading-relaxed whitespace-pre-wrap">
                       {letter}
+                      {generating && (
+                        <span className="inline-block w-2 h-4 ml-1 bg-cyan-400 animate-pulse align-middle rounded-sm shadow-[0_0_8px_#22d3ee]" />
+                      )}
                     </pre>
                   </div>
                 )}
               </div>
+
 
               {/* Tips */}
               {generated && (

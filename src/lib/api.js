@@ -6,7 +6,8 @@ import axios from 'axios'
 import { supabase } from './supabase'
 
 const rawApiBase = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/+$/, '')
-const API_BASE = rawApiBase.endsWith('/api') ? rawApiBase : `${rawApiBase}/api`
+export const API_BASE = rawApiBase.endsWith('/api') ? rawApiBase : `${rawApiBase}/api`
+
 
 const api = axios.create({
   baseURL: API_BASE,

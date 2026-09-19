@@ -1,12 +1,47 @@
 const router = require('express').Router()
 const { optionalAuth } = require('../middleware/requireAuth')
-const { callGemini, isGeminiAvailable } = require('../lib/gemini')
+const { callGemini, streamGemini, isGeminiAvailable } = require('../lib/gemini')
 
 // Startup check: warn if GEMINI_API_KEY is not configured
 if (!isGeminiAvailable()) {
   console.warn('⚠️  GEMINI_API_KEY not set — AI features will use basic fallback (no Gemini)')
 } else {
   console.log('🤖 Gemini AI initialized with gemini-3.6-flash')
+}
+
+/* ── SSE Streaming Helpers ──────────────────────────────────── */
+function setupSse(res) {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  if (typeof res.flushHeaders === 'function') {
+    res.flushHeaders()
+  }
+}
+
+function sendSseChunk(res, chunk) {
+  res.write(`data: ${JSON.stringify({ chunk })}\n\n`)
+}
+
+function sendSseDone(res, payload = {}) {
+  res.write(`data: ${JSON.stringify({ done: true, ...payload })}\n\n`)
+  res.end()
+}
+
+function sendSseError(res, error) {
+  res.write(`data: ${JSON.stringify({ error })}\n\n`)
+  res.end()
+}
+
+async function streamFallbackWords(res, fullText, payload = {}) {
+  const words = fullText.split(' ')
+  for (let i = 0; i < words.length; i++) {
+    const chunk = (i === 0 ? '' : ' ') + words[i]
+    sendSseChunk(res, chunk)
+    await new Promise(r => setTimeout(r, 12))
+  }
+  sendSseDone(res, { fullText, _fallback: true, ...payload })
 }
 
 /**
@@ -66,10 +101,65 @@ function fallbackEnhanceBullets(bullets) {
   })
 }
 
+/* ── Streaming handler: Enhance Summary ────────────────────── */
+async function handleStreamEnhanceSummary(req, res) {
+  const { summary, role, skills } = req.body
+  if (!summary || !summary.trim()) {
+    return res.status(400).json({ error: 'Summary text is required.' })
+  }
+
+  setupSse(res)
+
+  const prompt = `You are an expert resume coach and ATS optimization specialist.
+Rewrite and improve this professional summary to be high-impact, ATS-friendly, and concise (3-4 sentences).
+
+Target Role: ${role || 'Software Engineer'}
+Key Skills: ${(skills || []).join(', ')}
+Current Summary: "${summary}"
+
+CRITICAL RULES:
+- DO NOT fabricate metrics, percentages, or numbers the user did not provide.
+- DO NOT invent employers, degrees, certifications, or technologies.
+- DO NOT add specific percentages like "35%" or "40%" unless the user wrote them.
+- Improve grammar, clarity, professional wording, and ATS keyword density.
+- Use strong professional language without inventing facts.
+- Output ONLY the final summary paragraph. No markdown, quotes, or preambles.`
+
+  try {
+    const result = await streamGemini(prompt, (chunk) => {
+      sendSseChunk(res, chunk)
+    }, 1200)
+
+    if (result?.fullText) {
+      const cleaned = result.fullText.replace(/^["']|["']$/g, '').trim()
+      return sendSseDone(res, {
+        original: summary,
+        enhanced: cleaned,
+        fullText: cleaned,
+      })
+    }
+  } catch (err) {
+    console.warn('Gemini stream summary error:', err.message)
+  }
+
+  // Fallback streaming
+  const fallback = fallbackEnhanceSummary(summary, role, skills)
+  await streamFallbackWords(res, fallback, {
+    original: summary,
+    enhanced: fallback,
+  })
+}
+
+/* ── POST /api/ai/stream/enhance-summary ───────────────────── */
+router.post(['/stream/enhance-summary', '/enhance-summary/stream'], optionalAuth, handleStreamEnhanceSummary)
+
 /* ── POST /api/ai/enhance-summary ──────────────────────────── */
 router.post('/enhance-summary', optionalAuth, async (req, res) => {
-  const { summary, role, skills } = req.body
+  if (req.query.stream === 'true' || req.body.stream) {
+    return handleStreamEnhanceSummary(req, res)
+  }
 
+  const { summary, role, skills } = req.body
   if (!summary || !summary.trim()) {
     return res.status(400).json({ error: 'Summary text is required.' })
   }
@@ -111,8 +201,71 @@ CRITICAL RULES:
   })
 })
 
+
+/* ── Streaming handler: Enhance Bullets ────────────────────── */
+async function handleStreamEnhanceBullets(req, res) {
+  const { bullets, role, company } = req.body
+  if (!bullets || !Array.isArray(bullets) || bullets.length === 0) {
+    return res.status(400).json({ error: 'Bullets array is required.' })
+  }
+
+  setupSse(res)
+
+  const prompt = `You are an expert resume coach.
+Improve each of the following work experience bullet points with strong action verbs and professional language.
+
+Role: ${role || 'Software Engineer'}
+Company: ${company || 'Tech Company'}
+
+Original Bullets:
+${bullets.map((b, i) => `${i + 1}. ${b}`).join('\n')}
+
+CRITICAL RULES:
+- DO NOT fabricate metrics, percentages, or numbers the user did not provide.
+- DO NOT invent specific numbers like "35%", "40%", "250k+", etc.
+- If the user provided metrics, keep them. If not, do NOT add any.
+- Improve grammar, use strong past-tense action verbs (Architected, Engineered, Developed, etc.).
+- Keep each bullet concise and impactful.
+- Return ONLY the enhanced bullets, one per line. No numbering, no markdown.`
+
+  try {
+    const result = await streamGemini(prompt, (chunk) => {
+      sendSseChunk(res, chunk)
+    }, 1500)
+
+    if (result?.fullText) {
+      const lines = result.fullText.split('\n')
+        .map(l => l.replace(/^[-•*\d.]+\s*/, '').trim())
+        .filter(Boolean)
+      if (lines.length > 0) {
+        return sendSseDone(res, {
+          original: bullets,
+          bullets: lines,
+          fullText: result.fullText,
+        })
+      }
+    }
+  } catch (err) {
+    console.warn('Gemini stream bullets error:', err.message)
+  }
+
+  // Fallback streaming
+  const enhanced = fallbackEnhanceBullets(bullets)
+  await streamFallbackWords(res, enhanced.join('\n'), {
+    original: bullets,
+    bullets: enhanced,
+  })
+}
+
+/* ── POST /api/ai/stream/enhance-bullets ───────────────────── */
+router.post(['/stream/enhance-bullets', '/enhance-bullets/stream'], optionalAuth, handleStreamEnhanceBullets)
+
 /* ── POST /api/ai/enhance-bullets ──────────────────────────── */
 router.post('/enhance-bullets', optionalAuth, async (req, res) => {
+  if (req.query.stream === 'true' || req.body.stream) {
+    return handleStreamEnhanceBullets(req, res)
+  }
+
   const { bullets, role, company } = req.body
 
   if (!bullets || !Array.isArray(bullets) || bullets.length === 0) {
@@ -163,8 +316,73 @@ CRITICAL RULES:
   })
 })
 
+/* ── Streaming handler: Enhance Section ────────────────────── */
+async function handleStreamEnhanceSection(req, res) {
+  const { section, content, context } = req.body
+
+  if (!section || !content) {
+    return res.status(400).json({ error: 'section and content are required.' })
+  }
+
+  setupSse(res)
+
+  const sectionPrompts = {
+    summary: `Improve this professional summary to be ATS-friendly and impactful (3-4 sentences). Role: ${context?.role || 'Professional'}. Skills: ${(context?.skills || []).join(', ')}.`,
+    skills: `Organize and improve this skills list for ATS compatibility. Return as a comma-separated list of skills.`,
+    projects: `Improve this project description to highlight technical impact and technologies used. Keep factual.`,
+    achievements: `Improve this achievement description with professional language. Keep factual — do not invent metrics.`,
+  }
+
+  const systemPrompt = sectionPrompts[section] || 'Improve this resume content professionally.'
+
+  const prompt = `${systemPrompt}
+
+Content to improve:
+"${content}"
+
+CRITICAL RULES:
+- DO NOT fabricate metrics, percentages, or numbers not in the original.
+- DO NOT invent employers, degrees, certifications, or technologies.
+- Improve grammar, clarity, and professional wording only.
+- Output ONLY the improved content. No markdown, quotes, or preambles.`
+
+  try {
+    const result = await streamGemini(prompt, (chunk) => {
+      sendSseChunk(res, chunk)
+    }, 1200)
+
+    if (result?.fullText) {
+      const cleaned = result.fullText.replace(/^["']|["']$/g, '').trim()
+      return sendSseDone(res, {
+        original: content,
+        enhanced: cleaned,
+        fullText: cleaned,
+      })
+    }
+  } catch (err) {
+    console.warn('Gemini stream section error:', err.message)
+  }
+
+  // Fallback
+  let fallback = content.trim()
+  fallback = fallback.charAt(0).toUpperCase() + fallback.slice(1)
+  if (!fallback.endsWith('.')) fallback += '.'
+
+  await streamFallbackWords(res, fallback, {
+    original: content,
+    enhanced: fallback,
+  })
+}
+
+/* ── POST /api/ai/stream/enhance ───────────────────────────── */
+router.post(['/stream/enhance', '/enhance/stream'], optionalAuth, handleStreamEnhanceSection)
+
 /* ── POST /api/ai/enhance ──────────────────────────────────── */
 router.post('/enhance', optionalAuth, async (req, res) => {
+  if (req.query.stream === 'true' || req.body.stream) {
+    return handleStreamEnhanceSection(req, res)
+  }
+
   const { section, content, context } = req.body
 
   if (!section || !content) {
@@ -216,8 +434,104 @@ CRITICAL RULES:
   })
 })
 
+/* ── Streaming handler: Cover Letter ───────────────────────── */
+async function handleStreamCoverLetter(req, res) {
+  const { name, role, company, skills, experience, tone } = req.body
+
+  if (!role || !company) {
+    return res.status(400).json({ error: 'Job role and company name are required.' })
+  }
+
+  setupSse(res)
+
+  const skillList = skills || 'relevant technical and interpersonal skills'
+  const expText = experience || 'relevant professional experience'
+  const toneText = tone || 'Professional'
+  const applicantName = name || 'the applicant'
+
+  const prompt = `You are an expert career coach and professional cover letter writer.
+Write a complete, professional cover letter for ${applicantName} applying for the "${role}" position at ${company}.
+
+Applicant Details:
+- Name: ${applicantName}
+- Key Skills: ${skillList}
+- Experience: ${expText}
+- Desired Tone: ${toneText}
+
+CRITICAL RULES:
+- Write a COMPLETE cover letter with date, greeting, 3-4 body paragraphs, and closing.
+- Match the tone: ${toneText} (Professional = formal, Enthusiastic = energetic, Confident = assertive, Humble = modest).
+- Mention the company name "${company}" and the role "${role}" naturally.
+- Highlight the applicant's skills: ${skillList}.
+- DO NOT fabricate specific metrics, company names, or achievements the applicant did not provide.
+- DO NOT use generic placeholder text like "[Your Name]" or "[Address]".
+- Use the applicant's actual name: ${applicantName}.
+- Output ONLY the cover letter text. No markdown formatting, no code blocks, no preamble.
+- Start with today's date, then the greeting.`
+
+  try {
+    const result = await streamGemini(prompt, (chunk) => {
+      sendSseChunk(res, chunk)
+    }, 1500)
+
+    if (result?.fullText) {
+      const cleaned = result.fullText
+        .replace(/^```[\s\S]*?\n/, '')
+        .replace(/```\s*$/, '')
+        .replace(/^["']|["']$/g, '')
+        .trim()
+      return sendSseDone(res, { letter: cleaned, fullText: cleaned })
+    }
+  } catch (err) {
+    console.warn('Gemini stream cover letter error:', err.message)
+  }
+
+  // Smart template fallback when Gemini is unavailable
+  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  const openings = {
+    Professional: `I am writing to express my strong interest in the ${role} position at ${company}.`,
+    Enthusiastic: `I was thrilled to discover the ${role} opening at ${company} and am excited to apply!`,
+    Confident:    `With ${expText} of proven expertise, I am the ideal candidate for the ${role} role at ${company}.`,
+    Humble:       `I am honored to apply for the ${role} position at ${company} and believe I can make a meaningful contribution.`,
+  }
+  const opening = openings[toneText] || openings.Professional
+
+  const fallbackLetter = `${today}
+
+Hiring Manager
+${company}
+
+Dear Hiring Manager,
+
+${opening}
+
+Throughout my career${experience ? ` spanning ${experience}` : ''}, I have developed a strong foundation in ${skillList}. My background has equipped me with the technical depth and collaborative mindset to deliver exceptional results and contribute meaningfully to ${company}'s mission and goals.
+
+In my previous roles, I have consistently demonstrated the ability to solve complex problems, collaborate with cross-functional teams, and drive measurable outcomes. I am particularly drawn to ${company} because of your reputation for innovation and commitment to excellence — values that deeply align with my own professional philosophy.
+
+I am confident that my expertise in ${skillList} would make me a valuable addition to your team. I look forward to the opportunity to bring my unique perspective and skills to the ${role} position and contribute to ${company}'s continued success.
+
+Thank you for considering my application. I would welcome the opportunity to discuss how my background and enthusiasm align with your needs. Please feel free to reach out at your earliest convenience.
+
+Warm regards,
+
+${applicantName}
+${role} Applicant`
+
+  await streamFallbackWords(res, fallbackLetter, {
+    letter: fallbackLetter,
+  })
+}
+
+/* ── POST /api/ai/stream/cover-letter ──────────────────────── */
+router.post(['/stream/cover-letter', '/cover-letter/stream'], optionalAuth, handleStreamCoverLetter)
+
 /* ── POST /api/ai/cover-letter ─────────────────────────────── */
 router.post('/cover-letter', optionalAuth, async (req, res) => {
+  if (req.query.stream === 'true' || req.body.stream) {
+    return handleStreamCoverLetter(req, res)
+  }
+
   const { name, role, company, skills, experience, tone } = req.body
 
   if (!role || !company) {

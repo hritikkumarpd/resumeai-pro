@@ -14,6 +14,9 @@ import {
   enhanceSummaryWithAI,
   enhanceBulletsWithAI,
   enhanceSectionWithAI,
+  streamEnhanceSummaryWithAI,
+  streamEnhanceBulletsWithAI,
+  streamEnhanceSectionWithAI,
 } from '../lib/aiService'
 import { resumeApi, pdfApi } from '../lib/api'
 import { isPaidPlan } from '../config/plans'
@@ -1484,90 +1487,150 @@ export default function Builder() {
     setSectionOrder(newOrder)
   }
 
-  // AI Auto-Enhance Summary with Gemini (preview-based)
+  // AI Auto-Enhance Summary with Gemini (real-time streaming preview)
   const handleEnhanceSummary = async () => {
     setIsEnhancingSummary(true)
     setAiPreviewError(null)
+    setAiPreview({
+      type: 'summary',
+      original: data.summary,
+      enhanced: '',
+      isStreaming: true,
+    })
+
     try {
-      const result = await enhanceSummaryWithAI({
+      let accumulated = ''
+      await streamEnhanceSummaryWithAI({
         summary: data.summary,
         role: data.personal.title,
         skills: data.skills
+      }, {
+        onChunk: (chunk, fullText) => {
+          accumulated = fullText
+          setAiPreview(prev => prev ? { ...prev, enhanced: fullText } : null)
+        },
+        onDone: (result, fullText) => {
+          const finalEnhanced = result?.enhanced || fullText || accumulated
+          setAiPreview(prev => prev ? { ...prev, enhanced: finalEnhanced, isStreaming: false } : null)
+          setIsEnhancingSummary(false)
+        },
+        onError: (err) => {
+          setAiPreviewError(err?.message || 'AI enhancement failed.')
+          setAiPreview(prev => prev ? { ...prev, isStreaming: false } : null)
+          setIsEnhancingSummary(false)
+        }
       })
-      if (result?.enhanced) {
-        setAiPreview({
-          type: 'summary',
-          original: data.summary,
-          enhanced: result.enhanced,
-        })
-      }
     } catch (err) {
       setAiPreviewError(err?.response?.data?.error || err?.message || 'AI enhancement failed. Please try again.')
-      setTimeout(() => setAiPreviewError(null), 5000)
-    } finally {
+      setAiPreview(prev => prev ? { ...prev, isStreaming: false } : null)
       setIsEnhancingSummary(false)
     }
   }
 
-  // AI Auto-Enhance Bullets with Gemini (preview-based)
+  // AI Auto-Enhance Bullets with Gemini (real-time streaming preview)
   const handleEnhanceBullets = async (expId) => {
     const exp = data.experience.find(e => e.id === expId)
     if (!exp) return
     setEnhancingExpId(expId)
     setAiPreviewError(null)
+    setAiPreview({
+      type: 'bullets',
+      targetId: expId,
+      original: exp.bullets,
+      enhanced: [],
+      rawText: '',
+      isStreaming: true,
+    })
+
     try {
-      const result = await enhanceBulletsWithAI({
+      let accumulated = ''
+      await streamEnhanceBulletsWithAI({
         bullets: exp.bullets,
         role: exp.role,
         company: exp.company
+      }, {
+        onChunk: (chunk, fullText) => {
+          accumulated = fullText
+          const previewLines = fullText.split('\n')
+            .map(l => l.replace(/^[-•*\d.]+\s*/, '').trim())
+            .filter(Boolean)
+          setAiPreview(prev => prev ? {
+            ...prev,
+            rawText: fullText,
+            enhanced: previewLines.length > 0 ? previewLines : [fullText]
+          } : null)
+        },
+        onDone: (result, fullText) => {
+          const finalBullets = result?.bullets || (fullText || accumulated).split('\n')
+            .map(l => l.replace(/^[-•*\d.]+\s*/, '').trim())
+            .filter(Boolean)
+          setAiPreview(prev => prev ? {
+            ...prev,
+            rawText: fullText || accumulated,
+            enhanced: finalBullets,
+            isStreaming: false
+          } : null)
+          setEnhancingExpId(null)
+        },
+        onError: (err) => {
+          setAiPreviewError(err?.message || 'AI enhancement failed.')
+          setAiPreview(prev => prev ? { ...prev, isStreaming: false } : null)
+          setEnhancingExpId(null)
+        }
       })
-      if (result?.bullets) {
-        setAiPreview({
-          type: 'bullets',
-          targetId: expId,
-          original: exp.bullets,
-          enhanced: result.bullets,
-        })
-      }
     } catch (err) {
       setAiPreviewError(err?.response?.data?.error || err?.message || 'AI enhancement failed. Please try again.')
-      setTimeout(() => setAiPreviewError(null), 5000)
-    } finally {
+      setAiPreview(prev => prev ? { ...prev, isStreaming: false } : null)
       setEnhancingExpId(null)
     }
   }
 
-  // AI Auto-Enhance Project with Gemini (preview-based)
+  // AI Auto-Enhance Project with Gemini (real-time streaming preview)
   const handleEnhanceProject = async (projectId) => {
     const proj = data.projects.find(p => p.id === projectId)
     if (!proj || !proj.desc) return
     setEnhancingProjectId(projectId)
     setAiPreviewError(null)
+    setAiPreview({
+      type: 'project',
+      targetId: projectId,
+      original: proj.desc,
+      enhanced: '',
+      isStreaming: true,
+    })
+
     try {
-      const result = await enhanceSectionWithAI({
+      let accumulated = ''
+      await streamEnhanceSectionWithAI({
         section: 'projects',
         content: `Project Name: ${proj.name || 'Project'}\nDescription: ${proj.desc}`,
         context: { role: data.personal.title, skills: data.skills }
+      }, {
+        onChunk: (chunk, fullText) => {
+          accumulated = fullText
+          setAiPreview(prev => prev ? { ...prev, enhanced: fullText } : null)
+        },
+        onDone: (result, fullText) => {
+          const finalEnhanced = result?.enhanced || fullText || accumulated
+          setAiPreview(prev => prev ? { ...prev, enhanced: finalEnhanced, isStreaming: false } : null)
+          setEnhancingProjectId(null)
+        },
+        onError: (err) => {
+          setAiPreviewError(err?.message || 'AI enhancement failed.')
+          setAiPreview(prev => prev ? { ...prev, isStreaming: false } : null)
+          setEnhancingProjectId(null)
+        }
       })
-      if (result?.enhanced) {
-        setAiPreview({
-          type: 'project',
-          targetId: projectId,
-          original: proj.desc,
-          enhanced: result.enhanced,
-        })
-      }
     } catch (err) {
       setAiPreviewError(err?.response?.data?.error || err?.message || 'AI enhancement failed. Please try again.')
-      setTimeout(() => setAiPreviewError(null), 5000)
-    } finally {
+      setAiPreview(prev => prev ? { ...prev, isStreaming: false } : null)
       setEnhancingProjectId(null)
     }
   }
 
   // Apply AI enhancement from preview modal
   const handleApplyAiPreview = () => {
-    if (!aiPreview) return
+    if (!aiPreview || aiPreview.isStreaming) return
     if (aiPreview.type === 'summary') {
       upd('summary', aiPreview.enhanced)
     } else if (aiPreview.type === 'bullets' && aiPreview.targetId) {
@@ -1580,14 +1643,14 @@ export default function Builder() {
 
   // Regenerate from preview modal
   const handleRegenerateAiPreview = () => {
-    if (!aiPreview) return
-    setAiPreview(null)
-    if (aiPreview.type === 'summary') {
+    if (!aiPreview || aiPreview.isStreaming) return
+    const { type, targetId } = aiPreview
+    if (type === 'summary') {
       handleEnhanceSummary()
-    } else if (aiPreview.type === 'bullets' && aiPreview.targetId) {
-      handleEnhanceBullets(aiPreview.targetId)
-    } else if (aiPreview.type === 'project' && aiPreview.targetId) {
-      handleEnhanceProject(aiPreview.targetId)
+    } else if (type === 'bullets' && targetId) {
+      handleEnhanceBullets(targetId)
+    } else if (type === 'project' && targetId) {
+      handleEnhanceProject(targetId)
     }
   }
 
@@ -2915,21 +2978,39 @@ export default function Builder() {
                 <div className="rounded-xl p-4 flex flex-col"
                      style={{ background: isLight ? '#f0fdf4' : 'rgba(16,185,129,.05)', border: `1px solid ${isLight ? '#86efac' : 'rgba(16,185,129,.3)'}` }}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
-                      <Sparkles size={11} /> AI Enhanced
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                      <Sparkles size={12} className={aiPreview.isStreaming ? 'text-cyan-400 animate-spin' : 'text-emerald-400'} />
+                      {aiPreview.isStreaming ? 'Streaming AI...' : 'AI Enhanced'}
                     </span>
-                    <span className="text-[10px] text-emerald-400/80 font-medium">Ready to Apply</span>
+                    {aiPreview.isStreaming ? (
+                      <span className="text-[10px] text-cyan-300 font-mono flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                        Live Stream
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-emerald-400/80 font-medium">Ready to Apply</span>
+                    )}
                   </div>
                   <div className="text-xs text-slate-200 leading-relaxed overflow-y-auto flex-1 font-sans"
                        style={{ color: isLight ? '#14532d' : '#e2e8f0' }}>
                     {aiPreview.type === 'summary' || aiPreview.type === 'project' ? (
-                      <p className="whitespace-pre-wrap font-medium">{aiPreview.enhanced}</p>
+                      <p className="whitespace-pre-wrap font-medium">
+                        {aiPreview.enhanced || (aiPreview.isStreaming ? 'Connecting to Gemini AI stream...' : '')}
+                        {aiPreview.isStreaming && (
+                          <span className="inline-block w-1.5 h-3.5 ml-1 bg-cyan-400 animate-pulse align-middle rounded-sm shadow-[0_0_8px_#22d3ee]" />
+                        )}
+                      </p>
                     ) : (
                       <ul className="list-disc list-inside space-y-1.5">
-                        {Array.isArray(aiPreview.enhanced) ? (
+                        {Array.isArray(aiPreview.enhanced) && aiPreview.enhanced.length > 0 ? (
                           aiPreview.enhanced.map((b, i) => <li key={i} className="font-medium">{b}</li>)
                         ) : (
-                          <li>{String(aiPreview.enhanced)}</li>
+                          <li className="font-medium">
+                            {aiPreview.rawText || (aiPreview.isStreaming ? 'Connecting to Gemini AI stream...' : String(aiPreview.enhanced))}
+                            {aiPreview.isStreaming && (
+                              <span className="inline-block w-1.5 h-3.5 ml-1 bg-cyan-400 animate-pulse align-middle rounded-sm shadow-[0_0_8px_#22d3ee]" />
+                            )}
+                          </li>
                         )}
                       </ul>
                     )}
@@ -2955,20 +3036,30 @@ export default function Builder() {
                 <button
                   type="button"
                   onClick={handleRegenerateAiPreview}
-                  disabled={isEnhancingSummary || !!enhancingExpId}
-                  className="px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 border border-purple-500/30 text-purple-300 hover:bg-purple-500/15 cursor-pointer disabled:opacity-50"
+                  disabled={aiPreview.isStreaming || isEnhancingSummary || !!enhancingExpId || !!enhancingProjectId}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 border border-purple-500/30 text-purple-300 hover:bg-purple-500/15 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <RefreshCw size={12} className={isEnhancingSummary || !!enhancingExpId ? 'animate-spin' : ''} />
+                  <RefreshCw size={12} className={aiPreview.isStreaming || isEnhancingSummary || !!enhancingExpId || !!enhancingProjectId ? 'animate-spin' : ''} />
                   <span>Regenerate</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleApplyAiPreview}
-                  className="btn-primary text-xs px-4 py-2 rounded-xl font-semibold shadow-lg shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer"
+                  disabled={aiPreview.isStreaming}
+                  className="btn-primary text-xs px-4 py-2 rounded-xl font-semibold shadow-lg shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Check size={14} />
-                  <span>Apply Changes</span>
+                  {aiPreview.isStreaming ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>Streaming...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} />
+                      <span>Apply Changes</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

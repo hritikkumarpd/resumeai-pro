@@ -90,8 +90,103 @@ async function callGeminiJson(prompt, maxTokens = 2500) {
   }
 }
 
+/**
+ * Call Google Gemini API with fallback models and stream chunks as they arrive.
+ * @param {string} prompt 
+ * @param {function} onChunk - Callback receiving text chunks
+ * @param {number} maxTokens 
+ * @returns {Promise<{fullText: string, model: string}|null>}
+ */
+async function streamGemini(prompt, onChunk, maxTokens = 1500) {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    return null
+  }
+
+  for (const model of MODELS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: maxTokens }
+          })
+        })
+
+        if (response.ok && response.body) {
+          const reader = response.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
+          let fullText = ''
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
+
+            for (const line of lines) {
+              const trimmed = line.trim()
+              if (!trimmed || !trimmed.startsWith('data:')) continue
+              const jsonStr = trimmed.slice(5).trim()
+              if (!jsonStr || jsonStr === '[DONE]') continue
+              try {
+                const parsed = JSON.parse(jsonStr)
+                const textChunk = parsed.candidates?.[0]?.content?.parts?.[0]?.text
+                if (textChunk) {
+                  fullText += textChunk
+                  if (typeof onChunk === 'function') {
+                    onChunk(textChunk)
+                  }
+                }
+              } catch (e) {
+                // Ignore incomplete SSE json fragments
+              }
+            }
+          }
+
+          if (buffer.trim().startsWith('data:')) {
+            try {
+              const parsed = JSON.parse(buffer.trim().slice(5).trim())
+              const textChunk = parsed.candidates?.[0]?.content?.parts?.[0]?.text
+              if (textChunk) {
+                fullText += textChunk
+                if (typeof onChunk === 'function') {
+                  onChunk(textChunk)
+                }
+              }
+            } catch (e) {}
+          }
+
+          if (fullText) {
+            return { fullText, model }
+          }
+        } else {
+          const errBody = await response.text().catch(() => '')
+          if (response.status === 503 && attempt === 0) {
+            await new Promise(r => setTimeout(r, 500))
+            continue
+          }
+          console.warn(`Gemini stream ${model} returned ${response.status}:`, errBody.slice(0, 160))
+          break
+        }
+      } catch (err) {
+        console.warn(`Gemini stream ${model} network error:`, err.message)
+        break
+      }
+    }
+  }
+  return null
+}
+
 module.exports = {
   callGemini,
   callGeminiJson,
+  streamGemini,
   isGeminiAvailable,
 }
+

@@ -29,7 +29,7 @@ router.post('/', requireAuth, async (req, res) => {
     if (count >= FREE_PLAN_LIMIT) {
       return res.status(403).json({
         error: `Free plan allows up to ${FREE_PLAN_LIMIT} resumes. Upgrade to Pro for unlimited resumes.`,
-        upgrade_url: `${(process.env.FRONTEND_URL || 'https://resumeaihritik.vercel.app').replace(/\/+$/, '')}/pricing`,
+        upgrade_url: `${(process.env.FRONTEND_URL || 'https://dailyresumeai.online').replace(/\/+$/, '')}/pricing`,
       })
     }
   }
@@ -135,7 +135,7 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
     if (count >= FREE_PLAN_LIMIT) {
       return res.status(403).json({
         error: `Free plan allows up to ${FREE_PLAN_LIMIT} resumes. Upgrade to Pro for unlimited resumes.`,
-        upgrade_url: `${(process.env.FRONTEND_URL || 'https://resumeaihritik.vercel.app').replace(/\/+$/, '')}/pricing`,
+        upgrade_url: `${(process.env.FRONTEND_URL || 'https://dailyresumeai.online').replace(/\/+$/, '')}/pricing`,
       })
     }
   }

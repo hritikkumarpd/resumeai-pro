@@ -314,7 +314,7 @@ router.post('/render-html', requireAuth, async (req, res) => {
         limit: FREE_EXPORT_LIMIT,
         month: quotaResult?.month || new Date().toISOString().slice(0, 7),
         resets_at: getQuotaResetDate(),
-        upgrade_url: `${(process.env.FRONTEND_URL || 'https://resumeaihritik.vercel.app').replace(/\/+$/, '')}/pricing`,
+        upgrade_url: `${(process.env.FRONTEND_URL || 'https://dailyresumeai.online').replace(/\/+$/, '')}/pricing`,
       })
     }
     quotaReserved = true
@@ -412,7 +412,7 @@ router.post('/generate', requireAuth, async (req, res) => {
         limit: FREE_EXPORT_LIMIT,
         month: quotaResult?.month || new Date().toISOString().slice(0, 7),
         resets_at: getQuotaResetDate(),
-        upgrade_url: `${(process.env.FRONTEND_URL || 'https://resumeaihritik.vercel.app').replace(/\/+$/, '')}/pricing`,
+        upgrade_url: `${(process.env.FRONTEND_URL || 'https://dailyresumeai.online').replace(/\/+$/, '')}/pricing`,
       })
     }
     quotaReserved = true

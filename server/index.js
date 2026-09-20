@@ -31,6 +31,8 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 // CORS — allow verified frontend origins, Vercel deployments, and local dev
 const allowedOrigins = [
   process.env.FRONTEND_URL,
+  'https://dailyresumeai.online',
+  'https://www.dailyresumeai.online',
   'https://resumeaipro.vercel.app',
   'https://resumeaihritik.vercel.app',
   'http://localhost:5173',
@@ -41,6 +43,10 @@ app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true)
     if (allowedOrigins.includes(origin)) {
+      return callback(null, true)
+    }
+    // Allow custom domain and any subdomains (e.g. www, app)
+    if (origin.endsWith('dailyresumeai.online')) {
       return callback(null, true)
     }
     // Allow any Vercel deployment of this project

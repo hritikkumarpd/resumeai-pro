@@ -5,7 +5,7 @@ const resend = process.env.RESEND_API_KEY
   : null
 
 const FROM = process.env.EMAIL_FROM || 'ResumeAI Pro <noreply@resumeaipro.com>'
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://resumeaihritik.vercel.app'
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://dailyresumeai.online'
 
 /* ── Email Templates ────────────────────────────────────────── */
 function welcomeHtml(name) {

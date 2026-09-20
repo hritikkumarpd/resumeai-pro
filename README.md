@@ -10,11 +10,11 @@
 [![Google Gemini](https://img.shields.io/badge/Gemini-AI%20Engine-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
 [![Razorpay](https://img.shields.io/badge/Razorpay-Payment%20Gateway-0C2340?style=for-the-badge&logo=razorpay&logoColor=white)](https://razorpay.com/)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://resumeaihritik.vercel.app)
+[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://dailyresumeai.online)
 
 **Transform raw career history into high-converting, ATS-beating resumes, cover letters, and recruiter insights powered by Google Gemini AI.**
 
-[🌐 Live Production Website](https://resumeaihritik.vercel.app) • [📖 Documentation](#-table-of-contents) • [🚀 Quickstart](#-quickstart--installation)
+[🌐 Live Production Website](https://dailyresumeai.online) • [📖 Documentation](#-table-of-contents) • [🚀 Quickstart](#-quickstart--installation)
 
 </div>
 
@@ -412,7 +412,7 @@ CREATE TABLE IF NOT EXISTS public.resumes (
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `RAZORPAY_KEY_ID` & `RAZORPAY_KEY_SECRET`
-   - `FRONTEND_URL` (`https://resumeaihritik.vercel.app`)
+   - `FRONTEND_URL` (`https://dailyresumeai.online`)
 
 ---
 

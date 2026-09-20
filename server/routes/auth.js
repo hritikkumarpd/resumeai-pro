@@ -127,14 +127,14 @@ router.post('/forgot-password', async (req, res) => {
   let targetUrl = (typeof redirectTo === 'string' && redirectTo.startsWith('http')) ? redirectTo : null
 
   if (!targetUrl) {
-    const rawOrigin = process.env.FRONTEND_URL || req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : null) || 'https://resumeaihritik.vercel.app'
+    const rawOrigin = process.env.FRONTEND_URL || req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : null) || 'https://dailyresumeai.online'
     const cleanOrigin = String(rawOrigin).replace(/\/+$/, '')
     targetUrl = `${cleanOrigin}/reset-password`
   }
 
   // Guard against any leftover string 'undefined'
   if (targetUrl.includes('undefined') || !targetUrl.startsWith('http')) {
-    targetUrl = 'https://resumeaihritik.vercel.app/reset-password'
+    targetUrl = `${(process.env.FRONTEND_URL || 'https://dailyresumeai.online').replace(/\/+$/, '')}/reset-password`
   }
 
   try {

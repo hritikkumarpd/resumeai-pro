@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import Navbar   from './components/layout/Navbar'
 import Footer   from './components/layout/Footer'
 import Home     from './pages/Home'
@@ -119,6 +120,7 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <AppRoutes />
+          <SpeedInsights />
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

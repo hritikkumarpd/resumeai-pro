@@ -1,0 +1,82 @@
+<!-- 
+  =======================================================
+  ResumeAI Pro — Supabase Email Templates Collection
+  =======================================================
+  Paste each template into your Supabase Dashboard:
+  Authentication -> Email Templates
+-->
+
+<!-- 
+  1. CONFIRM SIGN UP
+  Subject: Confirm your signup — ResumeAI Pro
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirm Your Email — ResumeAI Pro</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #0b0f19; padding: 40px 15px;">
+    <tr>
+      <td align="center">
+        <!-- Main Card -->
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 540px; background-color: #111827; border: 1px solid #1f2937; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+          <!-- Header -->
+          <tr>
+            <td style="padding: 36px 40px 24px; text-align: center; background: linear-gradient(180deg, rgba(99, 102, 241, 0.08) 0%, rgba(17, 24, 39, 0) 100%);">
+              <div style="display: inline-block; padding: 10px 18px; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 50px; margin-bottom: 16px;">
+                <span style="font-size: 18px; font-weight: 800; color: #818cf8; letter-spacing: -0.3px;">⚡ ResumeAI Pro</span>
+              </div>
+              <h1 style="margin: 0 0 10px; font-size: 24px; font-weight: 700; color: #f9fafb; letter-spacing: -0.5px;">Welcome to the Future of Resumes</h1>
+              <p style="margin: 0; font-size: 14px; color: #9ca3af;">Please verify your email address to activate your account</p>
+            </td>
+          </tr>
+
+          <!-- Content Body -->
+          <tr>
+            <td style="padding: 0 40px 32px; color: #d1d5db; font-size: 15px; line-height: 24px;">
+              <p style="margin: 0 0 20px;">Hi there,</p>
+              <p style="margin: 0 0 24px; color: #9ca3af;">
+                Thank you for creating an account with <strong style="color: #f3f4f6;">ResumeAI Pro</strong>. To begin building ATS-proof resumes and unlocking AI enhancement, please confirm your email address below:
+              </p>
+
+              <!-- CTA Button -->
+              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 28px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display: inline-block; padding: 14px 36px; background-color: #6366f1; background-image: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 600; border-radius: 10px; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4); text-align: center;">
+                      Verify Email Address
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Alternative OTP Section -->
+              <div style="background-color: #1f2937; border: 1px solid #374151; border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 24px;">
+                <div style="font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">Or use your 6-digit confirmation code</div>
+                <div style="font-family: monospace, Courier; font-size: 26px; font-weight: 700; letter-spacing: 6px; color: #818cf8;">{{ .Token }}</div>
+              </div>
+
+              <!-- Raw Link Fallback -->
+              <p style="margin: 0; font-size: 12px; color: #6b7280; line-height: 18px;">
+                Button not working? Copy and paste this URL into your browser:<br>
+                <a href="{{ .ConfirmationURL }}" style="color: #818cf8; word-break: break-all; text-decoration: underline;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Security Footer -->
+          <tr>
+            <td style="padding: 24px 40px; background-color: #0f172a; border-top: 1px solid #1f2937; text-align: center; font-size: 12px; color: #6b7280; line-height: 18px;">
+              <p style="margin: 0 0 6px;">If you didn't create an account with ResumeAI Pro, you can safely ignore this email.</p>
+              <p style="margin: 0;">© 2026 ResumeAI Pro. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

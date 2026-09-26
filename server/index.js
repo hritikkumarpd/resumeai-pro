@@ -1,0 +1,184 @@
+require('express-async-errors')
+require('dotenv').config()
+
+const express    = require('express')
+const cors       = require('cors')
+const helmet     = require('helmet')
+const morgan     = require('morgan')
+const compression = require('compression')
+const rateLimit  = require('express-rate-limit')
+
+const authRoutes        = require('./routes/auth')
+const resumeRoutes      = require('./routes/resumes')
+const atsRoutes         = require('./routes/ats')
+const coverLetterRoutes = require('./routes/coverLetters')
+const paymentRoutes     = require('./routes/payment')
+const pdfRoutes         = require('./routes/pdf')
+const adminRoutes       = require('./routes/admin')
+const aiRoutes          = require('./routes/ai')
+
+const app  = express()
+const PORT = process.env.PORT || 4000
+
+/* ── Reverse Proxy Configuration (Render/Railway/Vercel) ─────── */
+app.set('trust proxy', 1)
+
+/* ── Security & Middleware ──────────────────────────────────── */
+app.use(helmet())
+app.use(compression())
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
+
+// CORS — allow verified frontend origins, Vercel deployments, and local dev
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'https://dailyresumeai.online',
+  'https://www.dailyresumeai.online',
+  'https://resumeaipro.vercel.app',
+  'https://resumeaihritik.vercel.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+].filter(Boolean)
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true)
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true)
+    }
+    // Allow custom domain and its subdomains (e.g. www, app) — with a host boundary
+    // so lookalike domains like https://evildailyresumeai.online are NOT matched.
+    try {
+      const host = new URL(origin).hostname
+      if (host === 'dailyresumeai.online' || host.endsWith('.dailyresumeai.online')) {
+        return callback(null, true)
+      }
+      // Allow Vercel deployments of this project (match hostname segment, not a bare substring)
+      if (host.endsWith('.vercel.app') && (host.includes('resumeai') || host.includes('hritik'))) {
+        return callback(null, true)
+      }
+    } catch {
+      return callback(null, false)
+    }
+    // Allow local development ports
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      return callback(null, true)
+    }
+    return callback(null, false)
+  },
+  credentials: true,
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','X-Admin-Secret'],
+}))
+
+// JSON body parsing with rawBody retention for webhook signature verification
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf
+  },
+}))
+app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+
+/* ── Rate Limiting ──────────────────────────────────────────── */
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+})
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many auth attempts, please try again in 15 minutes.' },
+})
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many AI requests, please try again in a few minutes.' },
+})
+const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many payment requests, please try again later.' },
+})
+
+app.use('/api/', globalLimiter)
+app.use('/api/auth/', authLimiter)
+app.use('/api/ai/', aiLimiter)
+app.use('/api/payment/', paymentLimiter)
+
+/* ── Routes ─────────────────────────────────────────────────── */
+app.use('/api/auth',          authRoutes)
+app.use('/api/resumes',       resumeRoutes)
+app.use('/api/ats',           atsRoutes)
+app.use('/api/cover-letters', coverLetterRoutes)
+app.use('/api/payment',       paymentRoutes)
+// Standard Razorpay Standard Checkout endpoints
+const { optionalAuth } = require('./middleware/requireAuth')
+app.post('/api/create-order', paymentLimiter, optionalAuth, paymentRoutes.handleCreateOrder)
+app.post('/api/verify-payment', paymentLimiter, optionalAuth, paymentRoutes.handleVerifyPayment)
+app.use('/api/pdf',           pdfRoutes)
+app.use('/api/admin',         adminRoutes)
+app.use('/api/ai',            aiRoutes)
+
+/* ── Health Check ───────────────────────────────────────────── */
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'ResumeAI Pro API',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV,
+  })
+})
+
+app.get('/', (req, res) => {
+  res.json({ message: 'ResumeAI Pro API is running 🚀' })
+})
+
+/* ── 404 Handler ────────────────────────────────────────────── */
+app.use((req, res, next) => {
+  res.status(404).json({ error: `Route ${req.method} ${req.path} not found` })
+})
+
+/* ── Global Error Handler ───────────────────────────────────── */
+app.use((err, req, res, next) => {
+  // CORS errors come as plain Error objects from cors middleware
+  if (err.message && err.message.includes('CORS')) {
+    return res.status(403).json({ error: 'Cross-Origin Request Blocked by CORS Policy.' })
+  }
+
+  console.error('Server Error:', err)
+
+  // Supabase / Postgres errors
+  if (err.code === '23505') {
+    return res.status(409).json({ error: 'A record with this value already exists.' })
+  }
+  if (err.code === '23503') {
+    return res.status(400).json({ error: 'Referenced record does not exist.' })
+  }
+
+  const status  = err.statusCode || err.status || 500
+  const message = process.env.NODE_ENV === 'production'
+    ? (status === 500 ? 'Internal server error' : err.message || 'Internal server error')
+    : (err.message || 'Internal server error')
+
+  res.status(status).json({
+    error: message,
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+  })
+})
+
+/* ── Start Server ───────────────────────────────────────────── */
+app.listen(PORT, () => {
+  console.log(`
+  ╔═══════════════════════════════════════╗
+  ║  ResumeAI Pro API Server              ║
+  ║  Running on port ${PORT}                 ║
+  ║  ENV: ${process.env.NODE_ENV || 'development'}               ║
+  ╚═══════════════════════════════════════╝
+  `)
+})
+
+module.exports = app

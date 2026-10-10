@@ -230,16 +230,17 @@ function ResumeDoc({
 
   /* ── OVERLEAF: Jake's Resume / classic Overleaf layout ─────── */
   if (template === "Overleaf") {
+    // Categories are explicitly assigned by the user in the Skills editor.
+    // Legacy resumes without category metadata remain visible as Uncategorized.
     const skills = Array.isArray(data.skills) ? data.skills.filter(Boolean) : []
-    const skillGroups = [
-      { label: 'Languages', values: skills.filter(v => /^(python|java|c\+\+|c|javascript|typescript|html\/?css|css|sql|r|go|rust|kotlin|swift)$/i.test(v.trim())) },
-      { label: 'Frameworks', values: skills.filter(v => /react|node\.js|nodejs|express|flask|fastapi|django|spring|next\.js|nextjs|vue|angular|tailwind|material-ui|wordpress|junit/i.test(v)) },
-      { label: 'Developer Tools', values: skills.filter(v => /git|github|docker|kubernetes|travis|google cloud|aws|azure|vs code|visual studio|pycharm|intellij|eclipse|linux|postman|vercel|supabase/i.test(v)) },
-      { label: 'Libraries', values: skills.filter(v => /pandas|numpy|matplotlib|scikit|pytorch|tensorflow|opencv|axios|redux/i.test(v)) },
-    ]
-    const assigned = new Set(skillGroups.flatMap(group => group.values))
-    const otherSkills = skills.filter(v => !assigned.has(v))
-    if (otherSkills.length) skillGroups[1].values.push(...otherSkills)
+    const categoryMap = data.skillCategories && typeof data.skillCategories === 'object' ? data.skillCategories : {}
+    const grouped = new Map()
+    skills.forEach(skill => {
+      const category = (categoryMap[skill] || 'Uncategorized').trim() || 'Uncategorized'
+      if (!grouped.has(category)) grouped.set(category, [])
+      grouped.get(category).push(skill)
+    })
+    const skillGroups = Array.from(grouped, ([label, values]) => ({ label, values }))
     const sectionHeading = { fontSize: '15px', fontWeight: 700, lineHeight: 1.2, borderBottom: '1px solid #111827', paddingBottom: '2px', marginBottom: '5px', color: '#111827' }
     const smallText = { fontSize: '10.5px', lineHeight: 1.3, color: '#111827' }
     return (
@@ -1391,11 +1392,31 @@ export default function Builder() {
   const updExp = (id, key, val) => setData(d => ({ ...d, experience: d.experience.map(e => e.id === id ? { ...e, [key]: val } : e) }))
   
   const addSkill = () => {
-    const sk = skillInput.trim()
-    if (sk && !data.skills.includes(sk)) {
-      upd('skills', [...data.skills, sk])
+    const sk = skillInput.trim().replace(/\\s+/g, ' ')
+    const exists = data.skills.some(value => value.toLocaleLowerCase() === sk.toLocaleLowerCase())
+    if (sk && !exists) {
+      setData(current => ({
+        ...current,
+        skills: [...current.skills, sk],
+        skillCategories: { ...(current.skillCategories || {}), [sk]: current.skillCategories?.[sk] || 'Uncategorized' }
+      }))
       setSkillInput('')
     }
+  }
+
+  const setSkillCategory = (skill, category) => {
+    setData(current => ({
+      ...current,
+      skillCategories: { ...(current.skillCategories || {}), [skill]: category }
+    }))
+  }
+
+  const removeSkill = (skill) => {
+    setData(current => {
+      const skillCategories = { ...(current.skillCategories || {}) }
+      delete skillCategories[skill]
+      return { ...current, skills: current.skills.filter(value => value !== skill), skillCategories }
+    })
   }
 
   // Save photo in user account & localStorage
@@ -2466,15 +2487,28 @@ export default function Builder() {
                       onMoveDown={() => moveSection('skills', 1)}
                       isLight={isLight}
                     >
-                      <div className="flex flex-wrap gap-1.5 mb-3">
+                      <p className={`text-xs mb-3 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                        Assign each skill to a category. Categories are saved with the resume; no keyword guessing is used.
+                      </p>
+                      <div className="flex flex-col gap-2 mb-3">
                         {data.skills.map(sk => (
-                          <span key={sk} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
-                                style={{ background: 'rgba(124,58,237,.2)', border: '1px solid rgba(124,58,237,.3)', color: '#A78BFA' }}>
-                            {sk}
-                            <button onClick={() => upd('skills', data.skills.filter(s => s !== sk))} className="text-purple-400/50 hover:text-red-400 transition-colors">×</button>
-                          </span>
+                          <div key={sk} className="grid grid-cols-[minmax(0,1fr)_minmax(130px,0.9fr)_auto] gap-2 items-center">
+                            <span className={`text-xs break-words ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{sk}</span>
+                            <input
+                              aria-label={`Category for ${sk}`}
+                              list="resume-skill-category-options"
+                              value={data.skillCategories?.[sk] || 'Uncategorized'}
+                              onChange={e => setSkillCategory(sk, e.target.value)}
+                              className="form-input text-xs py-2 px-2 min-w-0"
+                              placeholder="Category"
+                            />
+                            <button aria-label={`Remove ${sk}`} onClick={() => removeSkill(sk)} className="text-purple-400/50 hover:text-red-400 transition-colors px-1">×</button>
+                          </div>
                         ))}
                       </div>
+                      <datalist id="resume-skill-category-options">
+                        {['Languages', 'Frameworks & Runtime', 'Libraries', 'Databases', 'Developer Tools', 'Platforms & Operating Systems', 'Core Concepts', 'Cloud & DevOps', 'Uncategorized'].map(category => <option key={category} value={category} />)}
+                      </datalist>
                       <div className="flex gap-2">
                         <input value={skillInput} onChange={e => setSkillInput(e.target.value)}
                                onKeyDown={e => e.key === 'Enter' && addSkill()}

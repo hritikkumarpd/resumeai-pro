@@ -1034,7 +1034,9 @@ function ResumeDoc({
               </div>
               <div className="text-gray-850 leading-relaxed" style={{ fontSize: `${Math.round(11.5 * fontSizeScale)}px` }}>
                 <span className="font-bold text-black">Core & Tools: </span>
-                {data.skills.join(' • ')}
+                {getSkillGroups(data.skills, data.skillCategories).map(group => (
+                    <div key={group.label}><span className="font-bold text-black">{group.label}: </span>{group.values.join(', ')}</div>
+                  ))}
               </div>
             </div>
           )

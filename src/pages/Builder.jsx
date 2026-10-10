@@ -23,91 +23,15 @@ import { isPaidPlan } from '../config/plans'
 import { resumeStorage } from '../lib/resumeStorage'
 import { useScreenshotProtection } from '../hooks/useScreenshotProtection'
 
-/* ── Default resume data (Hritik Kumar — TMSL Kolkata, CSE AI & ML) ── */
+/* ── Blank, honest starter data for new resumes ── */
 const defaultData = {
-  personal: {
-    name: 'Hritik Kumar',
-    title: 'Software Development Engineer (AI & ML)',
-    email: 'hritikkumarpd@gmail.com',
-    phone: '+91 94716 36126',
-    location: 'Gaya, Bihar, India',
-    linkedin: 'linkedin.com/in/hritikkumar',
-    website: 'github.com/hritikkumar',
-    photo: '' // Base64 data URL
-  },
-  summary: 'Results-driven Computer Science Engineering undergraduate specializing in Artificial Intelligence and Machine Learning at Techno Main Salt Lake (TMSL), Kolkata. Passionate about architecting scalable full-stack web applications, machine learning pipelines, and high-performance microservices. Proficient in Python, Java, React.js, Node.js, and SQL, with a strong foundation in Data Structures, Algorithms, and System Design.',
-  experience: [
-    {
-      id: 1,
-      company: 'TechCorp India Pvt. Ltd.',
-      role: 'Software Development Engineer Intern',
-      period: 'Jun 2024 – Aug 2024',
-      location: 'Kolkata, India',
-      bullets: [
-        'Architected and deployed RESTful microservices with Node.js & PostgreSQL, handling 250k+ daily API requests.',
-        'Engineered responsive frontend modules using React.js and TypeScript, increasing user engagement by 28%.',
-        'Implemented Redis caching layer, decreasing p99 database response latency from 340ms to 75ms.',
-        'Automated CI/CD deployment pipelines using GitHub Actions and Docker, reducing release cycle time by 40%.'
-      ]
-    },
-    {
-      id: 2,
-      company: 'InnoTech AI Labs',
-      role: 'Machine Learning Research Intern',
-      period: 'Jan 2024 – Apr 2024',
-      location: 'Remote',
-      bullets: [
-        'Developed end-to-end NLP data processing pipelines and text embeddings using Python and PyTorch.',
-        'Trained and evaluated classification models achieving 93.4% accuracy across real-world test benchmarks.',
-        'Deployed lightweight model inference microservices via FastAPI and Docker with sub-50ms latency.'
-      ]
-    },
-  ],
-  education: [
-    {
-      id: 1,
-      school: 'Techno Main Salt Lake (TMSL), Kolkata',
-      degree: 'B.Tech in Computer Science and Engineering (AI & ML)',
-      period: '2022 – 2026',
-      gpa: '6.99 / 10.0 CGPA'
-    },
-    {
-      id: 2,
-      school: 'Senior Secondary School, Gaya (CBSE / State)',
-      degree: 'Class XII (Senior Secondary - Science PCM)',
-      period: '2020 – 2022',
-      gpa: '84.2%'
-    }
-  ],
-  skills: [
-    'Python', 'Java', 'C++', 'JavaScript', 'React.js', 'Node.js',
-    'Machine Learning (AI & ML)', 'SQL', 'PostgreSQL', 'Docker',
-    'Git & GitHub', 'Data Structures & Algorithms'
-  ],
-  projects: [
-    {
-      id: 1,
-      name: 'AI Resume & ATS Intelligence Matcher',
-      desc: 'Full-stack AI platform analyzing resumes against job descriptions with real-time keyword scoring, instant AI enhancement, and exportable ATS-tested PDFs. Built with React, Node.js, and Machine Learning algorithms.',
-      link: 'github.com/hritikkumar/ai-resume-matcher'
-    },
-    {
-      id: 2,
-      name: 'E-Commerce Microservices Platform',
-      desc: 'Distributed microservices backend with secure payment gateway, order tracking, and real-time inventory management. Built with Node.js, Redis, Docker, and PostgreSQL.',
-      link: 'github.com/hritikkumar/ecommerce-platform'
-    },
-    {
-      id: 3,
-      name: 'ML Predictive Classifier & API',
-      desc: 'End-to-end machine learning pipeline built with Scikit-Learn, Pandas, and FastAPI, providing real-time data predictions with automated validation checks.',
-      link: 'github.com/hritikkumar/ml-classifier'
-    }
-  ],
-  certifications: [
-    { id: 1, name: 'Machine Learning & AI Specialization', issuer: 'DeepLearning.AI / Coursera', year: '2024', link: 'https://coursera.org/verify/ML-SPECIALIZATION' },
-    { id: 2, name: 'Solved 350+ DSA Problems (LeetCode & GFG)', issuer: 'LeetCode', year: '2024', link: 'https://leetcode.com/u/hritikkumar/' },
-  ],
+  personal: { name: '', title: '', email: '', phone: '', location: '', linkedin: '', website: '', photo: '' },
+  summary: '',
+  experience: [],
+  education: [],
+  skills: [],
+  projects: [],
+  certifications: [],
 }
 
 export const TEMPLATES = [
@@ -1286,7 +1210,7 @@ export default function Builder() {
       if (saved?.id) setCurrentResumeId(saved.id)
       lastSavedDataRef.current = JSON.stringify(dataToSave)
       lastSavedMetaRef.current = JSON.stringify({ template, accent, font, title: resumeTitle })
-      setSaveStatus('saved')
+      setSaveStatus(saved?.error ? 'error' : 'saved')
       setTimeout(() => {
         if (saveVersionRef.current === version) setSaveStatus('idle')
       }, 3000)
@@ -1325,7 +1249,8 @@ export default function Builder() {
     const handleBeforeUnload = () => {
       // Only flush if there are unsaved changes
       const serialized = JSON.stringify(data)
-      if (serialized !== lastSavedDataRef.current) {
+      const metaSerialized = JSON.stringify({ template, accent, font, title: resumeTitle })
+      if (serialized !== lastSavedDataRef.current || metaSerialized !== lastSavedMetaRef.current) {
         // Synchronous local-only save (no async cloud calls during unload)
         resumeStorage.saveLocal({
           id: currentResumeId,

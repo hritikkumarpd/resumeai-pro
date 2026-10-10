@@ -6,6 +6,26 @@ import { resumeApi } from './api'
 
 const getStorageKey = (userId) => `resumeai_saved_resumes_${userId || 'guest'}`
 
+const readLocal = (key) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || '[]')
+    return Array.isArray(value) ? value : []
+  } catch (err) {
+    console.warn('Invalid local resume cache; starting with an empty cache:', err?.message)
+    return []
+  }
+}
+
+const writeLocal = (key, records) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(records))
+    return true
+  } catch (err) {
+    console.error('Unable to persist resume cache:', err?.message)
+    return false
+  }
+}
+
 export const resumeStorage = {
   /**
    * List all resumes for current user (merges cloud + local storage)
@@ -13,7 +33,7 @@ export const resumeStorage = {
   async list(user) {
     const userId = user?.id || 'guest'
     const localKey = getStorageKey(userId)
-    const localResumes = JSON.parse(localStorage.getItem(localKey) || '[]')
+    const localResumes = readLocal(localKey)
 
     try {
       // 1. Try server API
@@ -36,7 +56,7 @@ export const resumeStorage = {
         )
 
         // Cache back to local storage
-        localStorage.setItem(localKey, JSON.stringify(merged))
+        writeLocal(localKey, merged)
         return merged
       }
     } catch (err) {
@@ -64,7 +84,7 @@ export const resumeStorage = {
         const updatedLocal = localResumes.some(r => r.id === id)
           ? localResumes.map(r => r.id === id ? { ...r, ...res.data } : r)
           : [...localResumes, res.data]
-        localStorage.setItem(localKey, JSON.stringify(updatedLocal))
+        writeLocal(localKey, updatedLocal)
         return res.data
       }
     } catch (err) {
@@ -133,9 +153,13 @@ export const resumeStorage = {
             savedToCloud = true
             // Update local cache with server response
             const serverRecord = { ...resumeRecord, ...res.data }
-            const remapped = updatedLocal.map(r => r.id === resumeId ? serverRecord : r)
-            localStorage.setItem(localKey, JSON.stringify(remapped))
-            return { ...serverRecord, savedToCloud: true }
+            const latestLocal = readLocal(localKey)
+            const latestDraft = latestLocal.find(r => r.id === resumeId)
+            const preferredRecord = latestDraft && Date.parse(latestDraft.updated_at || 0) > Date.parse(serverRecord.updated_at || 0)
+              ? latestDraft : serverRecord
+            const remapped = latestLocal.map(r => r.id === resumeId ? preferredRecord : r)
+            writeLocal(localKey, remapped)
+            return { ...preferredRecord, savedToCloud: true }
           }
         } else {
           // Create new cloud resume
@@ -150,9 +174,12 @@ export const resumeStorage = {
             savedToCloud = true
             const finalId = res.data.id
             const finalRecord = { ...resumeRecord, id: finalId, ...res.data }
-            const remapped = updatedLocal.map(r => r.id === resumeId ? finalRecord : r)
-            localStorage.setItem(localKey, JSON.stringify(remapped))
-            return { ...finalRecord, savedToCloud: true }
+            const latestLocal = readLocal(localKey)
+            const latestDraft = latestLocal.find(r => r.id === resumeId) || resumeRecord
+            const preferredRecord = { ...finalRecord, ...latestDraft, id: finalId, savedToCloud: true }
+            const remapped = latestLocal.map(r => r.id === resumeId ? preferredRecord : r)
+            writeLocal(localKey, remapped)
+            return preferredRecord
           }
         }
       } catch (err) {
@@ -177,7 +204,7 @@ export const resumeStorage = {
     const localResumes = JSON.parse(localStorage.getItem(localKey) || '[]')
 
     const updated = localResumes.filter(r => r.id !== id)
-    localStorage.setItem(localKey, JSON.stringify(updated))
+    writeLocal(localKey, updated)
 
     try {
       if (user?.id && !id.startsWith('res_')) {
@@ -251,7 +278,7 @@ export const resumeStorage = {
       } else {
         localResumes.unshift(resumeRecord)
       }
-      localStorage.setItem(localKey, JSON.stringify(localResumes))
+      writeLocal(localKey, localResumes)
       return resumeRecord
     } catch (err) {
       console.error('saveLocal failed:', err)

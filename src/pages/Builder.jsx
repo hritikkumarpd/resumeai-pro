@@ -35,6 +35,7 @@ const defaultData = {
 }
 
 export const TEMPLATES = [
+  "Overleaf",
   "Classic ATS (Jake's / Overleaf)",
   "Modern Photo Executive (with Headshot)",
   "Two-Column Tech with Photo",
@@ -226,6 +227,103 @@ function ResumeDoc({
   ].filter(Boolean)
 
   const hasPhoto = Boolean(data.personal.photo)
+
+  /* ── OVERLEAF: Jake's Resume / classic Overleaf layout ─────── */
+  if (template === "Overleaf") {
+    const skills = Array.isArray(data.skills) ? data.skills.filter(Boolean) : []
+    const skillGroups = [
+      { label: 'Languages', values: skills.filter(v => /^(python|java|c\+\+|c|javascript|typescript|html\/?css|css|sql|r|go|rust|kotlin|swift)$/i.test(v.trim())) },
+      { label: 'Frameworks', values: skills.filter(v => /react|node\.js|nodejs|express|flask|fastapi|django|spring|next\.js|nextjs|vue|angular|tailwind|material-ui|wordpress|junit/i.test(v)) },
+      { label: 'Developer Tools', values: skills.filter(v => /git|github|docker|kubernetes|travis|google cloud|aws|azure|vs code|visual studio|pycharm|intellij|eclipse|linux|postman|vercel|supabase/i.test(v)) },
+      { label: 'Libraries', values: skills.filter(v => /pandas|numpy|matplotlib|scikit|pytorch|tensorflow|opencv|axios|redux/i.test(v)) },
+    ]
+    const assigned = new Set(skillGroups.flatMap(group => group.values))
+    const otherSkills = skills.filter(v => !assigned.has(v))
+    if (otherSkills.length) skillGroups[1].values.push(...otherSkills)
+    const sectionHeading = { fontSize: '15px', fontWeight: 700, lineHeight: 1.2, borderBottom: '1px solid #111827', paddingBottom: '2px', marginBottom: '5px', color: '#111827' }
+    const smallText = { fontSize: '10.5px', lineHeight: 1.3, color: '#111827' }
+    return (
+      <div id="printable-resume" className="bg-white text-gray-900" style={{
+        ...A4_RESUME_STYLE, padding: '14mm 17mm', boxShadow: 'none',
+        fontFamily: 'Times New Roman, serif', fontSize: '10.5px', lineHeight: 1.25
+      }}>
+        <header style={{ textAlign: 'center', marginBottom: '11px' }}>
+          <h1 style={{ fontSize: '22px', lineHeight: 1.15, fontWeight: 700, margin: 0, color: '#111827' }}>
+            {data.personal.name || 'Your Name'}
+          </h1>
+          <div style={{ fontSize: '10.5px', lineHeight: 1.4, marginTop: '3px' }}>
+            {[data.personal.phone, data.personal.email, data.personal.linkedin, data.personal.website]
+              .filter(Boolean).map((value, i, arr) => (
+                <React.Fragment key={value}>
+                  {i > 0 && <span> | </span>}
+                  {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? (
+                    <a href={`mailto:${value}`} style={{ color: 'inherit', textDecoration: 'none' }}>{value}</a>
+                  ) : /linkedin|github|https?:\/\//i.test(value) ? (
+                    <a href={formatUrl(value)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>{cleanUrlDisplay(value)}</a>
+                  ) : <span>{value}</span>}
+                </React.Fragment>
+              ))}
+          </div>
+        </header>
+
+        {data.education?.length > 0 && <section style={{ marginBottom: '10px' }}>
+          <h2 style={sectionHeading}>Education</h2>
+          {data.education.map(edu => <div key={edu.id} style={{ marginBottom: '5px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'baseline', ...smallText }}>
+              <strong>{edu.school}</strong><span style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>{edu.location || ''}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', ...smallText }}>
+              <span>{edu.degree}{edu.gpa ? `, ${edu.gpa}` : ''}</span><span style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>{edu.period}</span>
+            </div>
+          </div>)}
+        </section>}
+
+        {data.experience?.length > 0 && <section style={{ marginBottom: '10px' }}>
+          <h2 style={sectionHeading}>Experience</h2>
+          {data.experience.map(exp => <div key={exp.id} style={{ marginBottom: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'baseline', ...smallText }}>
+              <strong>{exp.role}</strong><span style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>{exp.period}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', ...smallText }}>
+              <span>{exp.company}</span><span style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>{exp.location}</span>
+            </div>
+            {exp.bullets?.length > 0 && <ul style={{ margin: '3px 0 0 15px', padding: 0, listStyleType: 'disc', ...smallText }}>
+              {exp.bullets.map((bullet, i) => <li key={i} style={{ marginBottom: '2px', paddingLeft: '1px' }}>{bullet}</li>)}
+            </ul>}
+          </div>)}
+        </section>}
+
+        {data.projects?.length > 0 && <section style={{ marginBottom: '10px' }}>
+          <h2 style={sectionHeading}>Projects</h2>
+          {data.projects.map(project => <div key={project.id} style={{ marginBottom: '5px' }}>
+            <div style={{ ...smallText, fontWeight: 700 }}>
+              {project.name}{project.link ? <span style={{ fontWeight: 400 }}> | <a href={formatUrl(project.link)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>{cleanUrlDisplay(project.link)}</a></span> : null}
+            </div>
+            <div style={{ ...smallText, marginLeft: '10px' }}>{project.desc}</div>
+          </div>)}
+        </section>}
+
+        {skills.length > 0 && <section style={{ marginBottom: '10px' }}>
+          <h2 style={sectionHeading}>Technical Skills</h2>
+          <div style={smallText}>
+            {skillGroups.filter(group => group.values.length > 0).map(group => <div key={group.label} style={{ marginBottom: '2px' }}>
+              <strong>{group.label}:</strong> {group.values.join(', ')}
+            </div>)}
+          </div>
+        </section>}
+
+        {data.summary && <section style={{ marginBottom: '10px' }}>
+          <h2 style={sectionHeading}>Summary</h2><p style={{ ...smallText, margin: 0 }}>{data.summary}</p>
+        </section>}
+        {data.certifications?.length > 0 && <section>
+          <h2 style={sectionHeading}>Certifications</h2>
+          <ul style={{ ...smallText, margin: '0 0 0 15px', padding: 0 }}>
+            {data.certifications.map(cert => <li key={cert.id}>{cert.name}{cert.issuer ? ` — ${cert.issuer}` : ''}{cert.year ? ` (${cert.year})` : ''}</li>)}
+          </ul>
+        </section>}
+      </div>
+    )
+  }
 
   /* ── 1. MODERN PHOTO EXECUTIVE (WITH HEADSHOT) ─────────────── */
   if (template === "Modern Photo Executive (with Headshot)") {

@@ -254,14 +254,14 @@ function ResumeDoc({
           <div style={{ fontSize: '10.5px', lineHeight: 1.4, marginTop: '3px' }}>
             {[data.personal.phone, data.personal.email, data.personal.linkedin, data.personal.website]
               .filter(Boolean).map((value, i, arr) => (
-                <React.Fragment key={value}>
+                <span key={value}>
                   {i > 0 && <span> | </span>}
                   {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? (
                     <a href={`mailto:${value}`} style={{ color: 'inherit', textDecoration: 'none' }}>{value}</a>
                   ) : /linkedin|github|https?:\/\//i.test(value) ? (
                     <a href={formatUrl(value)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>{cleanUrlDisplay(value)}</a>
                   ) : <span>{value}</span>}
-                </React.Fragment>
+                </span>
               ))}
           </div>
         </header>

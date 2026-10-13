@@ -1658,9 +1658,10 @@ export default function Builder() {
   }
 
   // AI Auto-Enhance Project with Gemini (real-time streaming preview)
-  const handleEnhanceProject = async (projectId, customPrompt = '', startGeneration = false) => {
+  const handleEnhanceProject = async (projectId, customPrompt = '', startGeneration = false, sourceContent = null) => {
     const proj = data.projects.find(p => p.id === projectId)
-    if (!proj || (!proj.desc?.trim() && !proj.name?.trim())) return
+    if (!proj || (!proj.desc?.trim() && !proj.name?.trim() && !sourceContent?.trim())) return
+    const currentSource = typeof sourceContent === 'string' ? sourceContent : (proj.desc || proj.name || '')
 
     // Open the preview first so the user can enter custom instructions inside the popup.
     if (!startGeneration) {
@@ -1668,7 +1669,7 @@ export default function Builder() {
       setAiPreview({
         type: 'project',
         targetId: projectId,
-        original: proj.desc || proj.name || '',
+        original: currentSource,
         customPrompt: '',
         enhanced: '',
         isStreaming: false,
@@ -1682,7 +1683,7 @@ export default function Builder() {
     setAiPreview({
       type: 'project',
       targetId: projectId,
-      original: proj.desc || proj.name || '',
+      original: currentSource,
       customPrompt: prompt,
       enhanced: '',
       isStreaming: true,
@@ -1692,7 +1693,7 @@ export default function Builder() {
       let accumulated = ''
       await streamEnhanceSectionWithAI({
         section: 'projects',
-        content: `Project Name: ${proj.name || 'Project'}\\nDescription: ${proj.desc || '(No description yet)'}`,
+        content: `Project Name: ${proj.name || 'Project'}\\nDescription: ${currentSource || '(No description yet)'}`,
         context: { role: data.personal.title, skills: data.skills, customPrompt: prompt }
       }, {
         onChunk: (chunk, fullText) => {
@@ -1739,7 +1740,7 @@ export default function Builder() {
     } else if (type === 'bullets' && targetId) {
       handleEnhanceBullets(targetId)
     } else if (type === 'project' && targetId) {
-      handleEnhanceProject(targetId, aiPreview.customPrompt || '', true)
+      handleEnhanceProject(targetId, aiPreview.customPrompt || '', true, aiPreview.original || '')
     }
   }
 
@@ -3071,7 +3072,7 @@ export default function Builder() {
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] text-slate-500">{(aiPreview.customPrompt || '').length}/1000 characters. Your original stays unchanged until Apply.</span>
                     {!aiPreview.isStreaming && !aiPreview.enhanced && (
-                      <button type="button" onClick={() => handleEnhanceProject(aiPreview.targetId, aiPreview.customPrompt || '', true)}
+                      <button type="button" onClick={() => handleEnhanceProject(aiPreview.targetId, aiPreview.customPrompt || '', true, aiPreview.original || '')}
                         className="btn-primary text-xs px-3 py-2 rounded-lg inline-flex items-center gap-1.5">
                         <Sparkles size={12} /> Generate AI
                       </button>
@@ -3088,7 +3089,18 @@ export default function Builder() {
                     <span className="text-[10px] text-slate-500">Current</span>
                   </div>
                   <div className="text-xs text-slate-400 leading-relaxed overflow-y-auto flex-1 font-sans">
-                    {aiPreview.type === 'summary' || aiPreview.type === 'project' ? (
+                    {aiPreview.type === 'project' ? (
+                      <textarea
+                        value={aiPreview.original || ''}
+                        onChange={e => setAiPreview(prev => prev ? { ...prev, original: e.target.value } : null)}
+                        placeholder="Type or edit your project description here before generating..."
+                        rows={7}
+                        maxLength={5000}
+                        disabled={aiPreview.isStreaming}
+                        className="w-full min-h-[150px] resize-y rounded-lg p-2 text-xs leading-relaxed outline-none focus:ring-1 focus:ring-purple-400/60 disabled:opacity-60"
+                        style={{ color: isLight ? '#334155' : '#cbd5e1', background: isLight ? '#ffffff' : 'rgba(255,255,255,.03)', border: `1px solid ${isLight ? '#cbd5e1' : 'rgba(255,255,255,.1)'}` }}
+                      />
+                    ) : aiPreview.type === 'summary' ? (
                       <p className="whitespace-pre-wrap">{aiPreview.original || '(No content entered)'}</p>
                     ) : (
                       <ul className="list-disc list-inside space-y-1.5">

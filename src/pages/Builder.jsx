@@ -1116,7 +1116,7 @@ function ResumeDoc({
 
 /* ── Main Builder Component ─────────────────────────────────── */
 export default function Builder() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const templateFromUrl = searchParams.get('template')
   const resumeIdFromUrl = searchParams.get('id')
 
@@ -1322,7 +1322,18 @@ export default function Builder() {
       // Guard against stale saves (race condition)
       if (saveVersionRef.current !== version) return
 
-      if (saved?.id) setCurrentResumeId(saved.id)
+      if (saved?.id) {
+        setCurrentResumeId(saved.id)
+        // Keep the active resume ID in the URL so a page refresh reloads this draft
+        // instead of initializing a new, blank resume.
+        if (searchParams.get('id') !== saved.id) {
+          setSearchParams(prev => {
+            const next = new URLSearchParams(prev)
+            next.set('id', saved.id)
+            return next
+          }, { replace: true })
+        }
+      }
       lastSavedDataRef.current = JSON.stringify(dataToSave)
       lastSavedMetaRef.current = JSON.stringify({ template, accent, font, title: resumeTitle })
       setSaveStatus(saved?.error ? 'error' : 'saved')
@@ -1337,7 +1348,7 @@ export default function Builder() {
         if (saveVersionRef.current === version) setSaveStatus('idle')
       }, 5000)
     }
-  }, [currentResumeId, resumeTitle, template, accent, font, user])
+  }, [currentResumeId, resumeTitle, template, accent, font, user, searchParams, setSearchParams])
 
   // Debounced autosave: triggers 2s after last edit (data + meta changes)
   useEffect(() => {

@@ -74,7 +74,7 @@ const SECTION_LABELS = {
 function getSkillGroups(skills = [], categoryMap = {}) {
   const grouped = new Map()
   skills.filter(Boolean).forEach(skill => {
-    const category = (categoryMap?.[skill] || 'Uncategorized').trim() || 'Uncategorized'
+    const category = (categoryMap?.[skill] || '').trim() || 'Skills'
     if (!grouped.has(category)) grouped.set(category, [])
     grouped.get(category).push(skill)
   })
@@ -1425,7 +1425,7 @@ export default function Builder() {
       setData(current => ({
         ...current,
         skills: [...current.skills, sk],
-        skillCategories: { ...(current.skillCategories || {}), [sk]: current.skillCategories?.[sk] || 'Uncategorized' }
+        skillCategories: { ...(current.skillCategories || {}), [sk]: current.skillCategories?.[sk] || '' }
       }))
       setSkillInput('')
     }
@@ -2524,7 +2524,7 @@ export default function Builder() {
                             <input
                               aria-label={`Category for ${sk}`}
                               list="resume-skill-category-options"
-                              value={data.skillCategories?.[sk] || 'Uncategorized'}
+                              value={data.skillCategories?.[sk] || ''}
                               onChange={e => setSkillCategory(sk, e.target.value)}
                               className="form-input text-xs py-2 px-2 min-w-0"
                               placeholder="Category"
@@ -2534,7 +2534,7 @@ export default function Builder() {
                         ))}
                       </div>
                       <datalist id="resume-skill-category-options">
-                        {['Languages', 'Frameworks & Runtime', 'Libraries', 'Databases', 'Developer Tools', 'Platforms & Operating Systems', 'Core Concepts', 'Cloud & DevOps', 'Uncategorized'].map(category => <option key={category} value={category} />)}
+                        {['Languages', 'Frameworks & Runtime', 'Libraries', 'Databases', 'Developer Tools', 'Platforms & Operating Systems', 'Core Concepts', 'Cloud & DevOps', 'Testing & QA', 'Security', 'Data & Analytics'].map(category => <option key={category} value={category} />)}
                       </datalist>
                       <div className="flex gap-2">
                         <input value={skillInput} onChange={e => setSkillInput(e.target.value)}

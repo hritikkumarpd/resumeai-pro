@@ -148,24 +148,24 @@ export async function streamEnhanceSectionWithAI(data, { onChunk, onDone, onErro
 /**
  * Enhance Professional Summary via backend AI endpoint (Promise-based).
  */
-export async function enhanceSummaryWithAI({ summary, role, skills }) {
+export async function enhanceSummaryWithAI({ summary, role, skills, customPrompt }) {
   if (!summary || !summary.trim()) {
     throw new Error('Summary text is required.')
   }
 
-  const { data } = await aiApi.enhanceSummary({ summary, role, skills })
+  const { data } = await aiApi.enhanceSummary({ summary, role, skills, customPrompt })
   return data
 }
 
 /**
  * Enhance Bullet Points via backend AI endpoint (Promise-based).
  */
-export async function enhanceBulletsWithAI({ bullets, role, company }) {
+export async function enhanceBulletsWithAI({ bullets, role, company, customPrompt }) {
   if (!bullets || !Array.isArray(bullets) || bullets.length === 0) {
     throw new Error('Bullets array is required.')
   }
 
-  const { data } = await aiApi.enhanceBullets({ bullets, role, company })
+  const { data } = await aiApi.enhanceBullets({ bullets, role, company, customPrompt })
   return data
 }
 

@@ -48,9 +48,9 @@ router.post('/', requireAuth, async (req, res) => {
       user_id:      req.user.id,
       title:        title || 'My Resume',
       data:         data  || {},
-      template:     template    || 'Modern Dark',
-      accent_color: accent_color || '#7C3AED',
-      font:         font || 'Inter',
+      template:     template    || "Classic ATS (Jake's / Overleaf)",
+      accent_color: accent_color || '#000000',
+      font:         font || 'Times New Roman',
     })
     .select()
     .single()

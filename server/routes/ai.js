@@ -117,10 +117,14 @@ function fallbackEnhanceBullets(bullets) {
 
 /* ── Streaming handler: Enhance Summary ────────────────────── */
 async function handleStreamEnhanceSummary(req, res) {
-  const { summary, role, skills } = req.body
+  const { summary, role, skills, customPrompt: directPrompt, context } = req.body
   if (!summary || !summary.trim()) {
     return res.status(400).json({ error: 'Summary text is required.' })
   }
+
+  const customPrompt = typeof directPrompt === 'string'
+    ? directPrompt.trim().slice(0, 1000)
+    : (typeof context?.customPrompt === 'string' ? context.customPrompt.trim().slice(0, 1000) : '')
 
   setupSse(res)
 
@@ -129,7 +133,7 @@ Rewrite and improve this professional summary to be high-impact, ATS-friendly, a
 
 Target Role: ${role || 'Software Engineer'}
 Key Skills: ${(skills || []).join(', ')}
-Current Summary: "${summary}"
+Current Summary: "${summary}"${customPrompt ? `\n\nUser instructions (follow when consistent with factual accuracy):\n${customPrompt}` : ''}
 
 CRITICAL RULES:
 - DO NOT fabricate metrics, percentages, or numbers the user did not provide.
@@ -177,17 +181,21 @@ router.post('/enhance-summary', optionalAuth, async (req, res) => {
     return handleStreamEnhanceSummary(req, res)
   }
 
-  const { summary, role, skills } = req.body
+  const { summary, role, skills, customPrompt: directPrompt, context } = req.body
   if (!summary || !summary.trim()) {
     return res.status(400).json({ error: 'Summary text is required.' })
   }
+
+  const customPrompt = typeof directPrompt === 'string'
+    ? directPrompt.trim().slice(0, 1000)
+    : (typeof context?.customPrompt === 'string' ? context.customPrompt.trim().slice(0, 1000) : '')
 
   const prompt = `You are an expert resume coach and ATS optimization specialist.
 Rewrite and improve this professional summary to be high-impact, ATS-friendly, and concise (3-4 sentences).
 
 Target Role: ${role || 'Software Engineer'}
 Key Skills: ${(skills || []).join(', ')}
-Current Summary: "${summary}"
+Current Summary: "${summary}"${customPrompt ? `\n\nUser instructions (follow when consistent with factual accuracy):\n${customPrompt}` : ''}
 
 CRITICAL RULES:
 - DO NOT fabricate metrics, percentages, or numbers the user did not provide.
@@ -222,10 +230,14 @@ CRITICAL RULES:
 
 /* ── Streaming handler: Enhance Bullets ────────────────────── */
 async function handleStreamEnhanceBullets(req, res) {
-  const { bullets, role, company } = req.body
+  const { bullets, role, company, customPrompt: directPrompt, context } = req.body
   if (!bullets || !Array.isArray(bullets) || bullets.length === 0) {
     return res.status(400).json({ error: 'Bullets array is required.' })
   }
+
+  const customPrompt = typeof directPrompt === 'string'
+    ? directPrompt.trim().slice(0, 1000)
+    : (typeof context?.customPrompt === 'string' ? context.customPrompt.trim().slice(0, 1000) : '')
 
   setupSse(res)
 
@@ -236,7 +248,7 @@ Role: ${role || 'Software Engineer'}
 Company: ${company || 'Tech Company'}
 
 Original Bullets:
-${bullets.map((b, i) => `${i + 1}. ${b}`).join('\n')}
+${bullets.map((b, i) => `${i + 1}. ${b}`).join('\n')}${customPrompt ? `\n\nUser instructions (follow when consistent with factual accuracy):\n${customPrompt}` : ''}
 
 CRITICAL RULES:
 - DO NOT fabricate metrics, percentages, or numbers the user did not provide.
@@ -288,11 +300,15 @@ router.post('/enhance-bullets', optionalAuth, async (req, res) => {
     return handleStreamEnhanceBullets(req, res)
   }
 
-  const { bullets, role, company } = req.body
+  const { bullets, role, company, customPrompt: directPrompt, context } = req.body
 
   if (!bullets || !Array.isArray(bullets) || bullets.length === 0) {
     return res.status(400).json({ error: 'Bullets array is required.' })
   }
+
+  const customPrompt = typeof directPrompt === 'string'
+    ? directPrompt.trim().slice(0, 1000)
+    : (typeof context?.customPrompt === 'string' ? context.customPrompt.trim().slice(0, 1000) : '')
 
   const prompt = `You are an expert resume coach.
 Improve each of the following work experience bullet points with strong action verbs and professional language.
@@ -301,7 +317,7 @@ Role: ${role || 'Software Engineer'}
 Company: ${company || 'Tech Company'}
 
 Original Bullets:
-${bullets.map((b, i) => `${i + 1}. ${b}`).join('\n')}
+${bullets.map((b, i) => `${i + 1}. ${b}`).join('\n')}${customPrompt ? `\n\nUser instructions (follow when consistent with factual accuracy):\n${customPrompt}` : ''}
 
 CRITICAL RULES:
 - DO NOT fabricate metrics, percentages, or numbers the user did not provide.
@@ -466,11 +482,15 @@ CRITICAL RULES:
 
 /* ── Streaming handler: Cover Letter ───────────────────────── */
 async function handleStreamCoverLetter(req, res) {
-  const { name, role, company, skills, experience, tone } = req.body
+  const { name, role, company, skills, experience, tone, customPrompt: directPrompt, context } = req.body
 
   if (!role || !company) {
     return res.status(400).json({ error: 'Job role and company name are required.' })
   }
+
+  const customPrompt = typeof directPrompt === 'string'
+    ? directPrompt.trim().slice(0, 1000)
+    : (typeof context?.customPrompt === 'string' ? context.customPrompt.trim().slice(0, 1000) : '')
 
   setupSse(res)
 
@@ -486,7 +506,7 @@ Applicant Details:
 - Name: ${applicantName}
 - Key Skills: ${skillList}
 - Experience: ${expText}
-- Desired Tone: ${toneText}
+- Desired Tone: ${toneText}${customPrompt ? `\n- User Instructions: ${customPrompt}` : ''}
 
 CRITICAL RULES:
 - Write a COMPLETE cover letter with date, greeting, 3-4 body paragraphs, and closing.
@@ -566,11 +586,15 @@ router.post('/cover-letter', optionalAuth, async (req, res) => {
     return handleStreamCoverLetter(req, res)
   }
 
-  const { name, role, company, skills, experience, tone } = req.body
+  const { name, role, company, skills, experience, tone, customPrompt: directPrompt, context } = req.body
 
   if (!role || !company) {
     return res.status(400).json({ error: 'Job role and company name are required.' })
   }
+
+  const customPrompt = typeof directPrompt === 'string'
+    ? directPrompt.trim().slice(0, 1000)
+    : (typeof context?.customPrompt === 'string' ? context.customPrompt.trim().slice(0, 1000) : '')
 
   const skillList = skills || 'relevant technical and interpersonal skills'
   const expText = experience || 'relevant professional experience'
@@ -584,7 +608,7 @@ Applicant Details:
 - Name: ${applicantName}
 - Key Skills: ${skillList}
 - Experience: ${expText}
-- Desired Tone: ${toneText}
+- Desired Tone: ${toneText}${customPrompt ? `\n- User Instructions: ${customPrompt}` : ''}
 
 CRITICAL RULES:
 - Write a COMPLETE cover letter with date, greeting, 3-4 body paragraphs, and closing.

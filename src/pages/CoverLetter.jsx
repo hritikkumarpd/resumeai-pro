@@ -235,6 +235,17 @@ export default function CoverLetter() {
                   </div>
                 </div>
 
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-slate-400">Custom Instructions / Prompt (optional)</label>
+                  <textarea
+                    {...register('customPrompt')}
+                    placeholder="e.g. Emphasize full-stack React experience and startup adaptability."
+                    rows={2}
+                    className="form-input text-xs py-2 px-3 resize-none"
+                    maxLength={1000}
+                  />
+                </div>
+
                 <button type="submit" disabled={generating}
                         className="btn-primary py-3.5 rounded-xl gap-2 justify-center mt-1 disabled:opacity-60">
                   {generating

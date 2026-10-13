@@ -11,14 +11,11 @@ import {
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import {
-  enhanceSummaryWithAI,
-  enhanceBulletsWithAI,
-  enhanceSectionWithAI,
   streamEnhanceSummaryWithAI,
   streamEnhanceBulletsWithAI,
   streamEnhanceSectionWithAI,
 } from '../lib/aiService'
-import { resumeApi, pdfApi } from '../lib/api'
+import { pdfApi } from '../lib/api'
 import { isPaidPlan } from '../config/plans'
 import { resumeStorage } from '../lib/resumeStorage'
 import { useScreenshotProtection } from '../hooks/useScreenshotProtection'
@@ -1148,8 +1145,10 @@ export default function Builder() {
   const [isEnhancingSummary, setIsEnhancingSummary] = useState(false)
   const [enhancingExpId, setEnhancingExpId] = useState(null)
   const [enhancingProjectId, setEnhancingProjectId] = useState(null)
+  const [summaryAiPrompt, setSummaryAiPrompt] = useState('')
+  const [expAiPrompts, setExpAiPrompts] = useState({})
   const [projectAiPrompts, setProjectAiPrompts] = useState({})
-  const [aiPreview, setAiPreview] = useState(null) // { type, original, enhanced, targetId? }
+  const [aiPreview, setAiPreview] = useState(null) // { type, original, enhanced, customPrompt, targetId? }
   const [aiPreviewError, setAiPreviewError] = useState(null)
 
   // PDF Export State
@@ -1560,13 +1559,15 @@ export default function Builder() {
   }
 
   // AI Auto-Enhance Summary with Gemini (real-time streaming preview)
-  const handleEnhanceSummary = async () => {
+  const handleEnhanceSummary = async (promptOverride) => {
+    const customPrompt = (promptOverride !== undefined ? promptOverride : summaryAiPrompt || '').trim()
     setIsEnhancingSummary(true)
     setAiPreviewError(null)
     setAiPreview({
       type: 'summary',
       original: data.summary,
       enhanced: '',
+      customPrompt,
       isStreaming: true,
     })
 
@@ -1575,7 +1576,8 @@ export default function Builder() {
       await streamEnhanceSummaryWithAI({
         summary: data.summary,
         role: data.personal.title,
-        skills: data.skills
+        skills: data.skills,
+        customPrompt,
       }, {
         onChunk: (chunk, fullText) => {
           accumulated = fullText
@@ -1600,9 +1602,10 @@ export default function Builder() {
   }
 
   // AI Auto-Enhance Bullets with Gemini (real-time streaming preview)
-  const handleEnhanceBullets = async (expId) => {
+  const handleEnhanceBullets = async (expId, promptOverride) => {
     const exp = data.experience.find(e => e.id === expId)
     if (!exp) return
+    const customPrompt = (promptOverride !== undefined ? promptOverride : expAiPrompts[expId] || '').trim()
     setEnhancingExpId(expId)
     setAiPreviewError(null)
     setAiPreview({
@@ -1611,6 +1614,7 @@ export default function Builder() {
       original: exp.bullets,
       enhanced: [],
       rawText: '',
+      customPrompt,
       isStreaming: true,
     })
 
@@ -1619,7 +1623,8 @@ export default function Builder() {
       await streamEnhanceBulletsWithAI({
         bullets: exp.bullets,
         role: exp.role,
-        company: exp.company
+        company: exp.company,
+        customPrompt,
       }, {
         onChunk: (chunk, fullText) => {
           accumulated = fullText
@@ -1658,10 +1663,10 @@ export default function Builder() {
   }
 
   // AI Auto-Enhance Project with Gemini (real-time streaming preview)
-  const handleEnhanceProject = async (projectId) => {
+  const handleEnhanceProject = async (projectId, promptOverride) => {
     const proj = data.projects.find(p => p.id === projectId)
     if (!proj || (!proj.desc?.trim() && !proj.name?.trim())) return
-    const customPrompt = (projectAiPrompts[projectId] || '').trim()
+    const customPrompt = (promptOverride !== undefined ? promptOverride : projectAiPrompts[projectId] || '').trim()
     setEnhancingProjectId(projectId)
     setAiPreviewError(null)
     setAiPreview({
@@ -1715,16 +1720,17 @@ export default function Builder() {
     setAiPreview(null)
   }
 
-  // Regenerate from preview modal
-  const handleRegenerateAiPreview = () => {
+  // Regenerate from preview modal with optional prompt override
+  const handleRegenerateAiPreview = (promptOverride) => {
     if (!aiPreview || aiPreview.isStreaming) return
-    const { type, targetId } = aiPreview
+    const { type, targetId, customPrompt: existingPrompt } = aiPreview
+    const promptToUse = promptOverride !== undefined ? promptOverride : (existingPrompt || '')
     if (type === 'summary') {
-      handleEnhanceSummary()
+      handleEnhanceSummary(promptToUse)
     } else if (type === 'bullets' && targetId) {
-      handleEnhanceBullets(targetId)
+      handleEnhanceBullets(targetId, promptToUse)
     } else if (type === 'project' && targetId) {
-      handleEnhanceProject(targetId)
+      handleEnhanceProject(targetId, promptToUse)
     }
   }
 
@@ -2392,16 +2398,31 @@ export default function Builder() {
                     >
                       <Field value={data.summary} onChange={v => upd('summary', v)}
                              placeholder="Write a concise 2-3 sentence summary..." multiline />
-                      <div className="mt-2 flex items-center justify-between">
-                        <button
-                          onClick={handleEnhanceSummary}
-                          disabled={isEnhancingSummary}
-                          className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors font-medium"
-                        >
-                          <Sparkles size={12} className={isEnhancingSummary ? 'animate-spin' : ''} />
-                          <span>{isEnhancingSummary ? 'AI Enhancing Summary...' : 'Auto-Enhance with AI'}</span>
-                        </button>
-                        <span className="text-[10px] text-emerald-400 font-medium">● AI Engine Ready</span>
+                      <div className="flex flex-col gap-1.5 mt-2.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Custom AI Prompt (optional)</label>
+                          <span className="text-[10px] text-emerald-400 font-medium">● AI Engine Ready</span>
+                        </div>
+                        <input
+                          type="text"
+                          value={summaryAiPrompt}
+                          onChange={e => setSummaryAiPrompt(e.target.value)}
+                          placeholder="e.g. Focus on cloud architecture and team mentorship. Keep under 3 sentences."
+                          className="form-input text-xs py-1.5 px-3 w-full"
+                          maxLength={1000}
+                        />
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-[10px] text-slate-500">Live preview opens before replacing text.</span>
+                          <button
+                            type="button"
+                            onClick={() => handleEnhanceSummary()}
+                            disabled={isEnhancingSummary || !data.summary?.trim()}
+                            className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Sparkles size={12} className={isEnhancingSummary ? 'animate-pulse' : ''} />
+                            <span>{isEnhancingSummary ? 'Enhancing Summary...' : 'AI Enhance Summary'}</span>
+                          </button>
+                        </div>
                       </div>
                     </EditorSection>
                   )
@@ -2439,23 +2460,34 @@ export default function Builder() {
                               <Field label="Period" value={exp.period} onChange={v => updExp(exp.id, 'period', v)} placeholder="Jun 2024 – Aug 2024" />
                               <Field label="Location" value={exp.location} onChange={v => updExp(exp.id, 'location', v)} placeholder="Kolkata, India" />
                             </div>
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center justify-between">
-                                <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Bullet Points (one per line)</label>
-                                <button
-                                  onClick={() => handleEnhanceBullets(exp.id)}
-                                  disabled={enhancingExpId === exp.id}
-                                  className="flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 transition-colors font-medium"
-                                >
-                                  <Sparkles size={11} className={enhancingExpId === exp.id ? 'animate-spin' : ''} />
-                                  <span>{enhancingExpId === exp.id ? 'Enhancing...' : 'AI Enhance Bullets'}</span>
-                                </button>
+                              <div className="flex flex-col gap-1.5">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Bullet Points (one per line)</label>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEnhanceBullets(exp.id)}
+                                    disabled={enhancingExpId === exp.id || !exp.bullets.some(b => b && b.trim())}
+                                    className="flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 transition-colors font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <Sparkles size={11} className={enhancingExpId === exp.id ? 'animate-pulse' : ''} />
+                                    <span>{enhancingExpId === exp.id ? 'Enhancing...' : 'AI Enhance Bullets'}</span>
+                                  </button>
+                                </div>
+                                <textarea value={exp.bullets.join('\n')}
+                                          onChange={e => updExp(exp.id, 'bullets', e.target.value.split('\n'))}
+                                          className="form-input text-xs py-2 px-3 resize-none" rows={3}
+                                          placeholder="Describe your technical achievements..." />
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <input
+                                    type="text"
+                                    value={expAiPrompts[exp.id] || ''}
+                                    onChange={e => setExpAiPrompts(prev => ({ ...prev, [exp.id]: e.target.value }))}
+                                    placeholder="Custom prompt (optional): e.g. Action verbs, emphasize scale..."
+                                    className="form-input text-[11px] py-1 px-2.5 flex-1"
+                                    maxLength={1000}
+                                  />
+                                </div>
                               </div>
-                              <textarea value={exp.bullets.join('\n')}
-                                        onChange={e => updExp(exp.id, 'bullets', e.target.value.split('\n'))}
-                                        className="form-input text-xs py-2 px-3 resize-none" rows={3}
-                                        placeholder="Describe your technical achievements..." />
-                            </div>
                           </div>
                         ))}
                         <button onClick={() => upd('experience', [...data.experience, { id: Date.now(), company: '', role: '', period: '', location: '', bullets: [''] }])}
@@ -3017,14 +3049,14 @@ export default function Builder() {
         </div>
       )}
 
-      {/* ── AI Enhancement Preview Modal (Apply / Cancel / Regenerate) ── */}
+      {/* ── AI Enhancement Preview Modal (Apply / Cancel / Regenerate / Manual Prompt) ── */}
       {aiPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="w-full max-w-2xl rounded-2xl p-6 shadow-2xl border flex flex-col max-h-[90vh]"
+          <div className="w-full max-w-3xl rounded-2xl p-6 shadow-2xl border flex flex-col max-h-[92vh]"
                style={{ background: isLight ? '#ffffff' : '#0e1136', borderColor: isLight ? '#cbd5e1' : 'rgba(124,58,237,.35)' }}>
             
             {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b flex-shrink-0"
+            <div className="flex items-center justify-between pb-3 border-b flex-shrink-0"
                  style={{ borderColor: isLight ? '#e2e8f0' : 'rgba(255,255,255,.1)' }}>
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-purple-500/20 text-purple-400 border border-purple-500/30">
@@ -3035,21 +3067,123 @@ export default function Builder() {
                     AI Enhancement Preview
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Review suggested changes before applying. No metrics or facts are invented.
+                    Review suggested changes before applying. Add manual instructions below to customize results.
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setAiPreview(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors cursor-pointer"
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isLight ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100' : 'text-slate-400 hover:text-slate-100 hover:bg-white/10'
+                }`}
                 title="Cancel"
               >
                 <X size={18} />
               </button>
             </div>
 
+            {/* Manual Prompt Input Section (Interactive In-Modal Customization) */}
+            <div className="mt-3.5 p-3 rounded-xl flex flex-col gap-2 flex-shrink-0"
+                 style={{
+                   background: isLight ? '#f8fafc' : 'rgba(124,58,237,.06)',
+                   border: `1px solid ${isLight ? '#e2e8f0' : 'rgba(124,58,237,.2)'}`
+                 }}>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5"
+                       style={{ color: isLight ? '#6b21a8' : '#c084fc' }}>
+                  <Sparkles size={12} />
+                  Manual Prompt / AI Instructions
+                </label>
+                <span className="text-[10px]" style={{ color: isLight ? '#64748b' : '#94a3b8' }}>
+                  Press Enter or click Update to re-generate with prompt
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={aiPreview.customPrompt || ''}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setAiPreview(prev => prev ? { ...prev, customPrompt: val } : null)
+                    if (aiPreview.type === 'summary') setSummaryAiPrompt(val)
+                    else if (aiPreview.type === 'bullets' && aiPreview.targetId) setExpAiPrompts(prev => ({ ...prev, [aiPreview.targetId]: val }))
+                    else if (aiPreview.type === 'project' && aiPreview.targetId) setProjectAiPrompts(prev => ({ ...prev, [aiPreview.targetId]: val }))
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !aiPreview.isStreaming) {
+                      e.preventDefault()
+                      handleRegenerateAiPreview(aiPreview.customPrompt)
+                    }
+                  }}
+                  placeholder="e.g. Make it concise, highlight leadership & metrics, tailor for Senior role..."
+                  className="form-input text-xs py-2 px-3 flex-1"
+                  maxLength={1000}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRegenerateAiPreview(aiPreview.customPrompt)}
+                  disabled={aiPreview.isStreaming || isEnhancingSummary || !!enhancingExpId || !!enhancingProjectId}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 border border-purple-500/40 text-purple-300 bg-purple-500/15 hover:bg-purple-500/25 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  title="Re-run AI with these instructions"
+                >
+                  <RefreshCw size={12} className={aiPreview.isStreaming || isEnhancingSummary || !!enhancingExpId || !!enhancingProjectId ? 'animate-spin' : ''} />
+                  <span>Update</span>
+                </button>
+              </div>
+
+              {/* Quick suggestion tags */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[10px] text-slate-400 mr-1">Suggestions:</span>
+                {[
+                  'Make it concise (3-4 sentences)',
+                  'Focus on leadership & impact',
+                  'Add strong action verbs',
+                  'Optimize ATS keywords',
+                  'Tailor for Senior role'
+                ].map(chip => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => {
+                      setAiPreview(prev => prev ? { ...prev, customPrompt: chip } : null)
+                      if (aiPreview.type === 'summary') setSummaryAiPrompt(chip)
+                      else if (aiPreview.type === 'bullets' && aiPreview.targetId) setExpAiPrompts(prev => ({ ...prev, [aiPreview.targetId]: chip }))
+                      else if (aiPreview.type === 'project' && aiPreview.targetId) setProjectAiPrompts(prev => ({ ...prev, [aiPreview.targetId]: chip }))
+                      if (!aiPreview.isStreaming) {
+                        handleRegenerateAiPreview(chip)
+                      }
+                    }}
+                    className="text-[10px] px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                    style={{
+                      background: isLight ? '#ffffff' : 'rgba(255,255,255,.06)',
+                      color: isLight ? '#475569' : '#cbd5e1',
+                      border: `1px solid ${isLight ? '#cbd5e1' : 'rgba(255,255,255,.12)'}`
+                    }}
+                  >
+                    + {chip}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Error Notification inside modal if regeneration fails */}
+            {aiPreviewError && (
+              <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center justify-between">
+                <span>{aiPreviewError}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRegenerateAiPreview(aiPreview.customPrompt)}
+                  className="underline font-semibold text-red-300 hover:text-red-200 cursor-pointer ml-3"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
             {/* Comparison Body */}
-            <div className="py-4 space-y-4 overflow-y-auto flex-1 pr-1">
+            <div className="py-3.5 space-y-4 overflow-y-auto flex-1 pr-1">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Original */}
                 <div className="rounded-xl p-4 flex flex-col"
@@ -3058,13 +3192,14 @@ export default function Builder() {
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Original</span>
                     <span className="text-[10px] text-slate-500">Current</span>
                   </div>
-                  <div className="text-xs text-slate-400 leading-relaxed overflow-y-auto flex-1 font-sans">
+                  <div className="text-xs leading-relaxed overflow-y-auto flex-1 font-sans"
+                       style={{ color: isLight ? '#334155' : '#94a3b8' }}>
                     {aiPreview.type === 'summary' || aiPreview.type === 'project' ? (
                       <p className="whitespace-pre-wrap">{aiPreview.original || '(No content entered)'}</p>
                     ) : (
                       <ul className="list-disc list-inside space-y-1.5">
                         {Array.isArray(aiPreview.original) ? (
-                          aiPreview.original.map((b, i) => <li key={i} className="text-slate-400">{b}</li>)
+                          aiPreview.original.map((b, i) => <li key={i} style={{ color: isLight ? '#334155' : '#94a3b8' }}>{b}</li>)
                         ) : (
                           <li>{String(aiPreview.original)}</li>
                         )}
@@ -3077,20 +3212,20 @@ export default function Builder() {
                 <div className="rounded-xl p-4 flex flex-col"
                      style={{ background: isLight ? '#f0fdf4' : 'rgba(16,185,129,.05)', border: `1px solid ${isLight ? '#86efac' : 'rgba(16,185,129,.3)'}` }}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                      <Sparkles size={12} className={aiPreview.isStreaming ? 'text-cyan-400 animate-spin' : 'text-emerald-400'} />
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-1.5">
+                      <Sparkles size={12} className={aiPreview.isStreaming ? 'text-cyan-400 animate-pulse' : 'text-emerald-500'} />
                       {aiPreview.isStreaming ? 'Streaming AI...' : 'AI Enhanced'}
                     </span>
                     {aiPreview.isStreaming ? (
-                      <span className="text-[10px] text-cyan-300 font-mono flex items-center gap-1.5">
+                      <span className="text-[10px] text-cyan-400 font-mono flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                         Live Stream
                       </span>
                     ) : (
-                      <span className="text-[10px] text-emerald-400/80 font-medium">Ready to Apply</span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400/90 font-medium">Ready to Apply</span>
                     )}
                   </div>
-                  <div className="text-xs text-slate-200 leading-relaxed overflow-y-auto flex-1 font-sans"
+                  <div className="text-xs leading-relaxed overflow-y-auto flex-1 font-sans"
                        style={{ color: isLight ? '#14532d' : '#e2e8f0' }}>
                     {aiPreview.type === 'summary' || aiPreview.type === 'project' ? (
                       <p className="whitespace-pre-wrap font-medium">
@@ -3119,13 +3254,13 @@ export default function Builder() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-between pt-4 border-t flex-shrink-0"
+            <div className="flex items-center justify-between pt-3 border-t flex-shrink-0"
                  style={{ borderColor: isLight ? '#e2e8f0' : 'rgba(255,255,255,.1)' }}>
               <button
                 type="button"
                 onClick={() => setAiPreview(null)}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                  isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-white/5 hover:bg-white/10 text-slate-300'
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer border ${
+                  isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300' : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
                 }`}
               >
                 Cancel / Keep Original
@@ -3134,7 +3269,7 @@ export default function Builder() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleRegenerateAiPreview}
+                  onClick={() => handleRegenerateAiPreview(aiPreview.customPrompt)}
                   disabled={aiPreview.isStreaming || isEnhancingSummary || !!enhancingExpId || !!enhancingProjectId}
                   className="px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 border border-purple-500/30 text-purple-300 hover:bg-purple-500/15 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >

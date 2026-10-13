@@ -1,12 +1,13 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   Download, Eye, ChevronDown, ChevronUp, Plus, Trash2,
-  Zap, Palette, Type, LayoutTemplate, Brain, Target, GripVertical,
-  ZoomIn, ZoomOut, Maximize2, Columns, Edit3, CheckCircle2, Sparkles,
-  ArrowUp, ArrowDown, Camera, X, Settings2, Check, Sun, Moon,
+  Zap, Palette, Type, LayoutTemplate, Brain, Target,
+  ZoomIn, ZoomOut, Columns, Edit3, Sparkles,
+  ArrowUp, ArrowDown, Camera, X, Check, Sun, Moon,
   Sliders, RotateCcw, RotateCw, SunDim, Contrast, Save, FileText, Edit2,
-  AlertCircle, Loader2, RefreshCw, Shield
+  AlertCircle, Loader2, RefreshCw, Shield, BookOpen, Search, Upload, Copy,
+  CheckCheck
 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
@@ -19,6 +20,15 @@ import { pdfApi } from '../lib/api'
 import { isPaidPlan } from '../config/plans'
 import { resumeStorage } from '../lib/resumeStorage'
 import { useScreenshotProtection } from '../hooks/useScreenshotProtection'
+import { ROLE_PRESETS } from '../data/rolePresets'
+import { ACTION_VERBS } from '../data/actionVerbs'
+import { auditResumeATS } from '../lib/atsScorer'
+import { analyzeJobDescriptionMatch } from '../lib/jobMatcher'
+import { exportResumeToJson, parseResumeFromJsonFile, formatResumeToPlainText } from '../lib/resumeExporter'
+import AtsAuditModal from '../components/builder/AtsAuditModal'
+import RolePresetsModal from '../components/builder/RolePresetsModal'
+import JobMatcherModal from '../components/builder/JobMatcherModal'
+import ActionVerbsModal from '../components/builder/ActionVerbsModal'
 
 /* ── Blank, honest starter data for new resumes ── */
 const defaultData = {
@@ -78,17 +88,9 @@ function getSkillGroups(skills = [], categoryMap = {}) {
   return Array.from(grouped, ([label, values]) => ({ label, values }))
 }
 
-/* ── ATS Score Calculation ─────────────────────────────────── */
+/* ── ATS Score Calculation (delegates to comprehensive audit engine) ── */
 function calcScore(data) {
-  let s = 40
-  if (data.personal.name && data.personal.name.length > 2) s += 5
-  if (data.personal.email && data.personal.email.includes('@')) s += 5
-  if (data.personal.phone && data.personal.phone.length > 8) s += 5
-  if (data.summary && data.summary.length > 50) s += 10
-  s += Math.min(data.experience.length * 8, 20)
-  s += Math.min(data.skills.length * 1.5, 10)
-  if (data.education.length > 0) s += 5
-  return Math.min(Math.round(s), 100)
+  return auditResumeATS(data).score
 }
 
 /* ── Section toggle with Reorder Controls (Up / Down) ──────── */
@@ -191,12 +193,14 @@ function ResumeDoc({
   font = 'Times New Roman',
   template = "Classic ATS (Jake's / Overleaf)",
   sectionOrder = DEFAULT_SECTION_ORDER,
-  fontSizeScale = 1.0
+  fontSizeScale = 1.0,
+  spacingDensity = 'normal'
 }) {
+  const densityMultiplier = spacingDensity === 'compact' ? 0.88 : spacingDensity === 'relaxed' ? 1.12 : 1.0
   const s = {
     fontFamily: font,
     fontSize: `${Math.round(11.5 * fontSizeScale)}px`,
-    lineHeight: 1.38
+    lineHeight: (1.38 * densityMultiplier).toFixed(2)
   }
 
   const contactItems = [
@@ -1151,6 +1155,17 @@ export default function Builder() {
   const [aiPreview, setAiPreview] = useState(null) // { type, original, enhanced, customPrompt, targetId? }
   const [aiPreviewError, setAiPreviewError] = useState(null)
 
+  // Market-Leading Suite States (ATS Audit, Job Matcher, Presets, Action Verbs, Export)
+  const [isAtsModalOpen, setIsAtsModalOpen] = useState(false)
+  const [isJdModalOpen, setIsJdModalOpen] = useState(false)
+  const [isPresetsModalOpen, setIsPresetsModalOpen] = useState(false)
+  const [isActionVerbsModalOpen, setIsActionVerbsModalOpen] = useState(false)
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false)
+  const [jdText, setJdText] = useState('')
+  const [spacingDensity, setSpacingDensity] = useState('normal') // 'compact' | 'normal' | 'relaxed'
+  const [plainTextCopied, setPlainTextCopied] = useState(false)
+  const jsonImportInputRef = useRef(null)
+
   // PDF Export State
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
 
@@ -1411,8 +1426,34 @@ export default function Builder() {
     return () => window.removeEventListener('resize', handleResize)
   }, [viewMode])
 
-  const score = calcScore(data)
-  const scoreColor = score >= 80 ? '#10B981' : score >= 60 ? '#F59E0B' : '#EF4444'
+  // Comprehensive Live ATS Audit Engine
+  const atsAudit = useMemo(() => auditResumeATS(data), [data])
+  const score = atsAudit.score
+  const scoreColor = score >= 85 ? '#10B981' : score >= 70 ? '#F59E0B' : '#EF4444'
+
+  // JSON Import & Plain Text Export Handlers
+  const handleImportJsonFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const importedData = await parseResumeFromJsonFile(file)
+      setData(importedData)
+      if (importedData.personal?.title) setResumeTitle(importedData.personal.title)
+      setIsExportMenuOpen(false)
+    } catch (err) {
+      alert(err.message || 'Could not import JSON file')
+    } finally {
+      if (e.target) e.target.value = ''
+    }
+  }
+
+  const handleCopyPlainText = () => {
+    const text = formatResumeToPlainText(data)
+    navigator.clipboard.writeText(text)
+    setPlainTextCopied(true)
+    setTimeout(() => setPlainTextCopied(false), 2000)
+    setIsExportMenuOpen(false)
+  }
 
   const upd = (key, val) => setData(d => ({ ...d, [key]: val }))
   const updPersonal = (key, val) => setData(d => ({ ...d, personal: { ...d.personal, [key]: val } }))
@@ -2191,23 +2232,132 @@ export default function Builder() {
             )}
           </button>
 
-          {/* Download PDF button */}
-          <button onClick={handlePrint}
-                  disabled={isGeneratingPdf}
-                  className="btn-primary text-xs px-2.5 sm:px-3.5 py-1.5 rounded-lg gap-1 sm:gap-1.5 shadow-lg shadow-purple-600/20 font-semibold cursor-pointer disabled:opacity-75 whitespace-nowrap">
-            {isGeneratingPdf ? (
-              <>
-                <Sparkles size={13} className="animate-spin text-purple-200" />
-                <span>Exporting Vector PDF...</span>
-              </>
-            ) : (
-              <>
-                <Download size={13} />
-                <span className="hidden sm:inline">Download PDF</span>
-                <span className="sm:hidden">PDF</span>
-              </>
-            )}
+          {/* 1-Click Role Examples / Presets */}
+          <button
+            type="button"
+            onClick={() => setIsPresetsModalOpen(true)}
+            className={`flex items-center gap-1.5 text-xs px-2.5 sm:px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer border ${
+              isLight
+                ? 'bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200'
+                : 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border-purple-500/30'
+            }`}
+            title="Load high-converting sample resumes for your role"
+          >
+            <BookOpen size={13} />
+            <span className="hidden sm:inline">Role Examples</span>
+            <span className="sm:hidden">Examples</span>
           </button>
+
+          {/* Target Job Description Matcher */}
+          <button
+            type="button"
+            onClick={() => setIsJdModalOpen(true)}
+            className={`flex items-center gap-1.5 text-xs px-2.5 sm:px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer border ${
+              isLight
+                ? 'bg-cyan-50 hover:bg-cyan-100 text-cyan-800 border-cyan-200'
+                : 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+            }`}
+            title="Match resume against any job description"
+          >
+            <Search size={13} />
+            <span className="hidden sm:inline">Job Matcher</span>
+            <span className="sm:hidden">Match</span>
+          </button>
+
+          {/* Download & Multi-Export Menu */}
+          <div className="relative flex items-center">
+            <button
+              onClick={handlePrint}
+              disabled={isGeneratingPdf}
+              className="btn-primary text-xs px-2.5 sm:px-3 py-1.5 rounded-l-lg rounded-r-none gap-1 sm:gap-1.5 shadow-lg shadow-purple-600/20 font-semibold cursor-pointer disabled:opacity-75 whitespace-nowrap"
+            >
+              {isGeneratingPdf ? (
+                <>
+                  <Sparkles size={13} className="animate-spin text-purple-200" />
+                  <span>Exporting Vector PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={13} />
+                  <span className="hidden sm:inline">Download PDF</span>
+                  <span className="sm:hidden">PDF</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsExportMenuOpen(v => !v)}
+              className="btn-primary text-xs px-1.5 py-1.5 rounded-r-lg rounded-l-none border-l border-white/20 cursor-pointer"
+              title="More export options (JSON backup, Plain Text, Import)"
+            >
+              <ChevronDown size={14} />
+            </button>
+
+            {/* Export Dropdown Menu */}
+            {isExportMenuOpen && (
+              <div
+                className="absolute right-0 top-full mt-2 w-56 rounded-xl border shadow-2xl p-1.5 z-50 animate-fade-in flex flex-col gap-1"
+                style={{
+                  background: isLight ? '#ffffff' : '#111338',
+                  borderColor: isLight ? '#cbd5e1' : 'rgba(124,58,237,.35)'
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    handlePrint()
+                    setIsExportMenuOpen(false)
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors ${
+                    isLight ? 'hover:bg-purple-50 text-slate-800' : 'hover:bg-white/10 text-slate-200'
+                  }`}
+                >
+                  <Download size={13} className="text-purple-400" />
+                  <span>Direct Vector PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    exportResumeToJson(data, resumeTitle)
+                    setIsExportMenuOpen(false)
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors ${
+                    isLight ? 'hover:bg-purple-50 text-slate-800' : 'hover:bg-white/10 text-slate-200'
+                  }`}
+                >
+                  <FileText size={13} className="text-cyan-400" />
+                  <span>Export JSON Backup (.json)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => jsonImportInputRef.current?.click()}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors ${
+                    isLight ? 'hover:bg-purple-50 text-slate-800' : 'hover:bg-white/10 text-slate-200'
+                  }`}
+                >
+                  <Upload size={13} className="text-amber-400" />
+                  <span>Import JSON Backup</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyPlainText}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors ${
+                    isLight ? 'hover:bg-purple-50 text-slate-800' : 'hover:bg-white/10 text-slate-200'
+                  }`}
+                >
+                  {plainTextCopied ? (
+                    <CheckCheck size={13} className="text-emerald-400" />
+                  ) : (
+                    <Copy size={13} className="text-emerald-400" />
+                  )}
+                  <span>{plainTextCopied ? 'Copied to Clipboard!' : 'Copy Plain Text (TXT for ATS)'}</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Free-plan export quota badge */}
           {user && !exportQuota.unlimited && (
@@ -2258,12 +2408,27 @@ export default function Builder() {
                 </div>
               </div>
 
-              {/* ATS Score */}
-              <div className="flex items-center gap-2">
+              {/* Interactive ATS Score Meter */}
+              <button
+                type="button"
+                onClick={() => setIsAtsModalOpen(true)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                  isLight
+                    ? 'bg-slate-50 hover:bg-slate-100 border-slate-300'
+                    : 'bg-white/5 hover:bg-white/10 border-white/10'
+                }`}
+                title="Click for full ATS scorecard & optimization checklist"
+              >
                 <Target size={13} style={{ color: scoreColor }} />
-                <span className="text-xs text-slate-400">ATS:</span>
-                <span className="text-xs font-bold" style={{ color: scoreColor }}>{score}%</span>
-              </div>
+                <span className="text-slate-400 text-[11px]">ATS:</span>
+                <span style={{ color: scoreColor }}>{score}%</span>
+                <span
+                  className="text-[10px] px-1.5 py-0.2 rounded font-medium ml-0.5"
+                  style={{ background: `${scoreColor}22`, color: scoreColor }}
+                >
+                  {atsAudit.grade.split(' ')[0]}
+                </span>
+              </button>
             </div>
 
             {/* Sections Scrollable Area */}
@@ -2463,15 +2628,26 @@ export default function Builder() {
                               <div className="flex flex-col gap-1.5">
                                 <div className="flex items-center justify-between">
                                   <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Bullet Points (one per line)</label>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEnhanceBullets(exp.id)}
-                                    disabled={enhancingExpId === exp.id || !exp.bullets.some(b => b && b.trim())}
-                                    className="flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 transition-colors font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                  >
-                                    <Sparkles size={11} className={enhancingExpId === exp.id ? 'animate-pulse' : ''} />
-                                    <span>{enhancingExpId === exp.id ? 'Enhancing...' : 'AI Enhance Bullets'}</span>
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setIsActionVerbsModalOpen(true)}
+                                      className="flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 transition-colors font-semibold cursor-pointer"
+                                      title="Browse high-impact action verbs"
+                                    >
+                                      <Zap size={11} />
+                                      <span>Action Verbs</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEnhanceBullets(exp.id)}
+                                      disabled={enhancingExpId === exp.id || !exp.bullets.some(b => b && b.trim())}
+                                      className="flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 transition-colors font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      <Sparkles size={11} className={enhancingExpId === exp.id ? 'animate-pulse' : ''} />
+                                      <span>{enhancingExpId === exp.id ? 'Enhancing...' : 'AI Enhance Bullets'}</span>
+                                    </button>
+                                  </div>
                                 </div>
                                 <textarea value={exp.bullets.join('\n')}
                                           onChange={e => updExp(exp.id, 'bullets', e.target.value.split('\n'))}
@@ -2698,19 +2874,40 @@ export default function Builder() {
               
               {/* Scaled bounding wrapper with m-auto so left margin is NEVER clipped off */}
               <div className="min-w-fit m-auto flex flex-col items-center justify-start pb-16">
-                {/* A4 Paper Badge indicator */}
-                <div className="mb-2.5 flex items-center gap-2 text-[11px] font-mono select-none">
-                  <span className={`px-2 py-0.5 rounded font-semibold flex items-center gap-1.5 ${
-                    isLight
-                      ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                      : 'bg-purple-500/10 text-purple-300 border border-purple-500/20'
-                  }`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    A4 Page (210 × 297 mm)
-                  </span>
-                  <span className={isLight ? 'text-slate-600' : 'text-slate-400'}>
-                    100% WYSIWYG Print Ready
-                  </span>
+                {/* A4 Paper Badge indicator & Spacing Density */}
+                <div className="mb-2.5 flex items-center justify-between w-full max-w-[794px] px-1 text-[11px] font-mono select-none flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded font-semibold flex items-center gap-1.5 ${
+                      isLight
+                        ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                        : 'bg-purple-500/10 text-purple-300 border border-purple-500/20'
+                    }`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      A4 Standard
+                    </span>
+                    <span className={isLight ? 'text-slate-600' : 'text-slate-400'}>
+                      WYSIWYG Print Canvas
+                    </span>
+                  </div>
+
+                  {/* FlowCV-style Spacing Density Switcher */}
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-400 mr-1 hidden sm:inline">Spacing:</span>
+                    {(['compact', 'normal', 'relaxed']).map(mode => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setSpacingDensity(mode)}
+                        className={`text-[10px] px-2 py-0.5 rounded capitalize transition-all cursor-pointer ${
+                          spacingDensity === mode
+                            ? (isLight ? 'bg-purple-600 text-white font-bold' : 'bg-purple-600 text-white font-bold')
+                            : (isLight ? 'bg-slate-200 text-slate-700 hover:bg-slate-300' : 'bg-white/5 text-slate-400 hover:bg-white/10')
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div style={{
@@ -2741,6 +2938,7 @@ export default function Builder() {
                       template={template}
                       sectionOrder={sectionOrder}
                       fontSizeScale={fontSizeScale}
+                      spacingDensity={spacingDensity}
                     />
                   </div>
                 </div>
@@ -3300,6 +3498,68 @@ export default function Builder() {
           </div>
         </div>
       )}
+
+      {/* ── ATS Score Audit Modal ── */}
+      {isAtsModalOpen && (
+        <AtsAuditModal
+          audit={atsAudit}
+          onClose={() => setIsAtsModalOpen(false)}
+          onOptimizeSummary={() => {
+            setIsAtsModalOpen(false)
+            handleEnhanceSummary()
+          }}
+          isLight={isLight}
+        />
+      )}
+
+      {/* ── Role Presets & Sample Resumes Modal ── */}
+      {isPresetsModalOpen && (
+        <RolePresetsModal
+          presets={ROLE_PRESETS}
+          onSelectPreset={(preset) => {
+            setData(preset.data)
+            setResumeTitle(preset.title)
+            setIsPresetsModalOpen(false)
+          }}
+          onClose={() => setIsPresetsModalOpen(false)}
+          isLight={isLight}
+        />
+      )}
+
+      {/* ── Target Job Description Matcher Modal ── */}
+      {isJdModalOpen && (
+        <JobMatcherModal
+          jdText={jdText}
+          setJdText={setJdText}
+          analysis={analyzeJobDescriptionMatch(jdText, data)}
+          onAddSkill={(skill) => {
+            const trimmed = skill.trim()
+            if (trimmed && !data.skills.some(s => s.toLowerCase() === trimmed.toLowerCase())) {
+              setData(d => ({ ...d, skills: [...d.skills, trimmed] }))
+            }
+          }}
+          onClose={() => setIsJdModalOpen(false)}
+          isLight={isLight}
+        />
+      )}
+
+      {/* ── Action Verbs Power Bank Modal ── */}
+      {isActionVerbsModalOpen && (
+        <ActionVerbsModal
+          categories={ACTION_VERBS}
+          onClose={() => setIsActionVerbsModalOpen(false)}
+          isLight={isLight}
+        />
+      )}
+
+      {/* Hidden JSON file input for importing */}
+      <input
+        ref={jsonImportInputRef}
+        type="file"
+        accept=".json"
+        onChange={handleImportJsonFile}
+        className="hidden"
+      />
 
       {/* ── Screenshot Protection Black Overlay ── */}
       {overlayVisible && (

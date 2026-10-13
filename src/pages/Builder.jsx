@@ -1658,17 +1658,32 @@ export default function Builder() {
   }
 
   // AI Auto-Enhance Project with Gemini (real-time streaming preview)
-  const handleEnhanceProject = async (projectId) => {
+  const handleEnhanceProject = async (projectId, customPrompt = '', startGeneration = false) => {
     const proj = data.projects.find(p => p.id === projectId)
     if (!proj || (!proj.desc?.trim() && !proj.name?.trim())) return
-    const customPrompt = (projectAiPrompts[projectId] || '').trim()
+
+    // Open the preview first so the user can enter custom instructions inside the popup.
+    if (!startGeneration) {
+      setAiPreviewError(null)
+      setAiPreview({
+        type: 'project',
+        targetId: projectId,
+        original: proj.desc || proj.name || '',
+        customPrompt: '',
+        enhanced: '',
+        isStreaming: false,
+      })
+      return
+    }
+
+    const prompt = typeof customPrompt === 'string' ? customPrompt.trim().slice(0, 1000) : ''
     setEnhancingProjectId(projectId)
     setAiPreviewError(null)
     setAiPreview({
       type: 'project',
       targetId: projectId,
       original: proj.desc || proj.name || '',
-      customPrompt,
+      customPrompt: prompt,
       enhanced: '',
       isStreaming: true,
     })
@@ -1677,8 +1692,8 @@ export default function Builder() {
       let accumulated = ''
       await streamEnhanceSectionWithAI({
         section: 'projects',
-        content: `Project Name: ${proj.name || 'Project'}\nDescription: ${proj.desc || '(No description yet)'}`,
-        context: { role: data.personal.title, skills: data.skills, customPrompt }
+        content: `Project Name: ${proj.name || 'Project'}\\nDescription: ${proj.desc || '(No description yet)'}`,
+        context: { role: data.personal.title, skills: data.skills, customPrompt: prompt }
       }, {
         onChunk: (chunk, fullText) => {
           accumulated = fullText
@@ -1702,7 +1717,7 @@ export default function Builder() {
     }
   }
 
-  // Apply AI enhancement from preview modal
+    // Apply AI enhancement from preview modal
   const handleApplyAiPreview = () => {
     if (!aiPreview || aiPreview.isStreaming) return
     if (aiPreview.type === 'summary') {
@@ -1724,7 +1739,7 @@ export default function Builder() {
     } else if (type === 'bullets' && targetId) {
       handleEnhanceBullets(targetId)
     } else if (type === 'project' && targetId) {
-      handleEnhanceProject(targetId)
+      handleEnhanceProject(targetId, aiPreview.customPrompt || '', true)
     }
   }
 
@@ -2580,28 +2595,16 @@ export default function Builder() {
                             </div>
                             <Field value={p.desc} onChange={v => upd('projects', data.projects.map(x => x.id === p.id ? { ...x, desc: v } : x))} placeholder="Key features, technologies, and achievements..." multiline />
                           </div>
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Custom AI Prompt (optional)</label>
-                            <textarea
-                              value={projectAiPrompts[p.id] || ''}
-                              onChange={e => setProjectAiPrompts(current => ({ ...current, [p.id]: e.target.value }))}
-                              placeholder="e.g. Highlight the architecture, tech stack, and my actual contribution. Do not invent metrics."
-                              rows={2}
-                              className="form-input text-xs py-2 px-3 w-full resize-y"
-                              maxLength={1000}
-                            />
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[10px] text-slate-500">AI suggestions are previewed before replacing your description.</span>
-                              <button
-                                type="button"
-                                onClick={() => handleEnhanceProject(p.id)}
-                                disabled={enhancingProjectId === p.id || (!p.name?.trim() && !p.desc?.trim())}
-                                className="flex items-center gap-1.5 text-[11px] text-purple-300 hover:text-purple-200 transition-colors font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <Sparkles size={12} className={enhancingProjectId === p.id ? 'animate-spin' : ''} />
-                                <span>{enhancingProjectId === p.id ? 'Generating...' : 'Generate with AI'}</span>
-                              </button>
-                            </div>
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleEnhanceProject(p.id)}
+                              disabled={enhancingProjectId === p.id || (!p.name?.trim() && !p.desc?.trim())}
+                              className="flex items-center gap-1.5 text-[11px] text-purple-300 hover:text-purple-200 transition-colors font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Sparkles size={12} />
+                              <span>AI Enhance Project</span>
+                            </button>
                           </div>
                           <Field label="GitHub / Demo URL" value={p.link} onChange={v => upd('projects', data.projects.map(x => x.id === p.id ? { ...x, link: v } : x))} placeholder="github.com/hritikkumar/project" />
                         </div>
@@ -3050,6 +3053,32 @@ export default function Builder() {
 
             {/* Comparison Body */}
             <div className="py-4 space-y-4 overflow-y-auto flex-1 pr-1">
+              {aiPreview.type === 'project' && (
+                <div className="rounded-xl p-3 flex flex-col gap-2"
+                     style={{ background: isLight ? '#f8fafc' : 'rgba(124,58,237,.08)', border: `1px solid ${isLight ? '#e2e8f0' : 'rgba(124,58,237,.25)'}` }}>
+                  <label className="text-xs font-semibold" style={{ color: isLight ? '#334155' : '#e2e8f0' }}>
+                    Custom AI Prompt <span className="font-normal text-slate-400">(optional)</span>
+                  </label>
+                  <textarea
+                    value={aiPreview.customPrompt || ''}
+                    onChange={e => setAiPreview(prev => prev ? { ...prev, customPrompt: e.target.value.slice(0, 1000) } : null)}
+                    placeholder="Tell AI what to focus on, e.g. tailor this project for a backend developer role, highlight APIs and database design, keep all claims factual..."
+                    rows={3}
+                    maxLength={1000}
+                    disabled={aiPreview.isStreaming}
+                    className="form-input text-xs py-2.5 px-3 w-full resize-y disabled:opacity-60"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-slate-500">{(aiPreview.customPrompt || '').length}/1000 characters. Your original stays unchanged until Apply.</span>
+                    {!aiPreview.isStreaming && !aiPreview.enhanced && (
+                      <button type="button" onClick={() => handleEnhanceProject(aiPreview.targetId, aiPreview.customPrompt || '', true)}
+                        className="btn-primary text-xs px-3 py-2 rounded-lg inline-flex items-center gap-1.5">
+                        <Sparkles size={12} /> Generate AI
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Original */}
                 <div className="rounded-xl p-4 flex flex-col"

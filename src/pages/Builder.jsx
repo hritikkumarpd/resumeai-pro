@@ -88,6 +88,24 @@ function getSkillGroups(skills = [], categoryMap = {}) {
   return Array.from(grouped, ([label, values]) => ({ label, values }))
 }
 
+
+/* Render project descriptions as real resume bullets when users enter one item per line.
+   Plain single-paragraph descriptions remain paragraphs for backward compatibility. */
+function renderProjectDescription(description, style = {}) {
+  const lines = String(description || '')
+    .split(/\r?\n/)
+    .map(line => line.trim().replace(/^(?:[•●▪◦*-]|\d+[.)])\s*/, ''))
+    .filter(Boolean)
+
+  if (lines.length <= 1) return <div style={style}>{lines[0] || ''}</div>
+
+  return (
+    <ul style={{ ...style, margin: '2px 0 0 0', paddingLeft: '16px', listStyleType: 'disc' }}>
+      {lines.map((line, index) => <li key={index} style={{ paddingLeft: '1px', marginBottom: '1px' }}>{line}</li>)}
+    </ul>
+  )
+}
+
 /* ── ATS Score Calculation (delegates to comprehensive audit engine) ── */
 function calcScore(data) {
   return auditResumeATS(data).score
@@ -311,7 +329,7 @@ function ResumeDoc({
             <div style={{ ...smallText, fontWeight: 700 }}>
               {project.name}{project.link ? <span style={{ fontWeight: 400 }}> | <a href={formatUrl(project.link)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>{cleanUrlDisplay(project.link)}</a></span> : null}
             </div>
-            <div style={{ ...smallText, marginLeft: '10px' }}>{project.desc}</div>
+            {renderProjectDescription(project.desc, { ...smallText, marginLeft: '10px' })}
           </div>)}
         </section>}
 
@@ -483,9 +501,7 @@ function ResumeDoc({
                           </a>
                         )}
                       </div>
-                      <div className="text-gray-800 leading-normal pl-2.5 border-l-2 border-gray-300 ml-0.5 mt-0.5" style={{ fontSize: `${Math.round(11.5 * fontSizeScale)}px` }}>
-                        {p.desc}
-                      </div>
+                      {renderProjectDescription(p.desc, { fontSize: `${Math.round(11.5 * fontSizeScale)}px`, color: '#1f2937', lineHeight: '1.4', marginTop: '2px' })}
                     </div>
                   ))}
                 </div>
@@ -615,8 +631,11 @@ function ResumeDoc({
                   Technical Stack
                 </div>
                 <div className="text-gray-800 space-y-1 leading-normal" style={{ fontSize: `${Math.round(11 * fontSizeScale)}px` }}>
-                  <div><span className="font-bold text-black block">Core:</span>{getSkillGroups(data.skills, data.skillCategories).filter(group => group.label === 'Core Concepts').flatMap(group => group.values).join(', ') || '—'}</div>
-                  <div><span className="font-bold text-black block">Tools & Libs:</span>{getSkillGroups(data.skills, data.skillCategories).filter(group => group.label !== 'Core Concepts').map(group => `${group.label}: ${group.values.join(', ')}`).join(' • ') || '—'}</div>
+                  {getSkillGroups(data.skills, data.skillCategories).filter(group => group.values.length > 0).map(group => (
+                    <div key={group.label}>
+                      <strong>{group.label}:</strong> {group.values.join(', ')}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -703,9 +722,7 @@ function ResumeDoc({
                           </a>
                         )}
                       </div>
-                      <div className="text-gray-800 leading-normal pl-2 border-l-2 border-gray-300 ml-0.5 mt-0.5" style={{ fontSize: `${Math.round(11.5 * fontSizeScale)}px` }}>
-                        {p.desc}
-                      </div>
+                      {renderProjectDescription(p.desc, { fontSize: `${Math.round(11.5 * fontSizeScale)}px`, color: '#1f2937', lineHeight: '1.4', marginTop: '2px' })}
                     </div>
                   ))}
                 </div>
@@ -860,9 +877,7 @@ function ResumeDoc({
                           </a>
                         )}
                       </div>
-                      <div className="text-gray-800 leading-normal mt-0.5" style={{ fontSize: `${Math.round(11.5 * fontSizeScale)}px` }}>
-                        {p.desc}
-                      </div>
+                      {renderProjectDescription(p.desc, { fontSize: `${Math.round(11.5 * fontSizeScale)}px`, color: '#1f2937', lineHeight: '1.4', marginTop: '2px' })}
                     </div>
                   ))}
                 </div>
@@ -1034,10 +1049,12 @@ function ResumeDoc({
                 Technical Skills
               </div>
               <div className="text-gray-850 leading-relaxed" style={{ fontSize: `${Math.round(11.5 * fontSizeScale)}px` }}>
-                <span className="font-bold text-black">Core & Tools: </span>
                 {getSkillGroups(data.skills, data.skillCategories).map(group => (
-                    <div key={group.label}><span className="font-bold text-black">{group.label}: </span>{group.values.join(', ')}</div>
-                  ))}
+                  <div key={group.label}>
+                    <span className="font-bold text-black">{group.label}: </span>
+                    {group.values.join(', ')}
+                  </div>
+                ))}
               </div>
             </div>
           )
@@ -1068,10 +1085,7 @@ function ResumeDoc({
                         </a>
                       )}
                     </div>
-                    <p className="text-gray-850 leading-normal pl-2 border-l-2 border-gray-400 mt-0.5"
-                       style={{ fontSize: `${Math.round(11.5 * fontSizeScale)}px` }}>
-                      {p.desc}
-                    </p>
+                    {renderProjectDescription(p.desc, { fontSize: `${Math.round(11.5 * fontSizeScale)}px`, color: '#1f2937', lineHeight: '1.4', marginTop: '2px' })}
                   </div>
                 ))}
               </div>
@@ -2786,7 +2800,7 @@ export default function Builder() {
                             <div className="flex items-center justify-between mb-1">
                               <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Description</label>
                             </div>
-                            <Field value={p.desc} onChange={v => upd('projects', data.projects.map(x => x.id === p.id ? { ...x, desc: v } : x))} placeholder="Key features, technologies, and achievements..." multiline />
+                            <Field value={p.desc} onChange={v => upd('projects', data.projects.map(x => x.id === p.id ? { ...x, desc: v } : x))} placeholder={"Enter each achievement on a new line (e.g. • Built REST APIs)"} multiline />
                           </div>
                           <div className="flex flex-col gap-1.5">
                             <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Custom AI Prompt (optional)</label>

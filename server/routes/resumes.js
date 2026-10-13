@@ -58,7 +58,12 @@ router.post('/', requireAuth, async (req, res) => {
   if (error) return res.status(500).json({ error: error.message })
 
   // Update resume count in profile
-  await supabaseAdmin.rpc('increment_resume_count', { user_id: req.user.id }).catch(() => {})
+  try {
+    await supabaseAdmin.rpc('increment_resume_count', { user_id: req.user.id })
+  } catch (err) {
+    // Resume persistence must not fail because the optional profile counter update failed.
+    console.warn('Could not increment resume count:', err?.message)
+  }
 
   res.status(201).json(resume)
 })
@@ -123,7 +128,12 @@ router.delete('/:id', requireAuth, async (req, res) => {
   if (error) return res.status(500).json({ error: error.message })
 
   // Decrement resume count in profile
-  await supabaseAdmin.rpc('decrement_resume_count', { user_id: req.user.id }).catch(() => {})
+  try {
+    await supabaseAdmin.rpc('decrement_resume_count', { user_id: req.user.id })
+  } catch (err) {
+    // Deletion is complete; do not turn a counter-maintenance issue into an API failure.
+    console.warn('Could not decrement resume count:', err?.message)
+  }
 
   res.json({ message: 'Resume deleted successfully.' })
 })
@@ -175,7 +185,12 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
   if (error) return res.status(500).json({ error: error.message })
 
   // Increment resume count
-  await supabaseAdmin.rpc('increment_resume_count', { user_id: req.user.id }).catch(() => {})
+  try {
+    await supabaseAdmin.rpc('increment_resume_count', { user_id: req.user.id })
+  } catch (err) {
+    // Resume persistence must not fail because the optional profile counter update failed.
+    console.warn('Could not increment resume count:', err?.message)
+  }
 
   res.status(201).json(copy)
 })

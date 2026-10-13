@@ -631,8 +631,11 @@ function ResumeDoc({
                   Technical Stack
                 </div>
                 <div className="text-gray-800 space-y-1 leading-normal" style={{ fontSize: `${Math.round(11 * fontSizeScale)}px` }}>
-                  <div><span className="font-bold text-black block">Core:</span>{getSkillGroups(data.skills, data.skillCategories).filter(group => group.label === 'Core Concepts').flatMap(group => group.values).join(', ') || '—'}</div>
-                  <div><span className="font-bold text-black block">Tools & Libs:</span>{getSkillGroups(data.skills, data.skillCategories).filter(group => group.label !== 'Core Concepts').map(group => `${group.label}: ${group.values.join(', ')}`).join(' • ') || '—'}</div>
+                  {getSkillGroups(data.skills, data.skillCategories).filter(group => group.values.length > 0).map(group => (
+                    <div key={group.label}>
+                      <strong>{group.label}:</strong> {group.values.join(', ')}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

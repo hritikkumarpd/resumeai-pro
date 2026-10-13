@@ -348,6 +348,8 @@ async function handleStreamEnhanceSection(req, res) {
 
   setupSse(res)
 
+  const customPrompt = typeof context?.customPrompt === 'string' ? context.customPrompt.trim().slice(0, 1000) : ''
+
   const sectionPrompts = {
     summary: `Improve this professional summary to be ATS-friendly and impactful (3-4 sentences). Role: ${context?.role || 'Professional'}. Skills: ${(context?.skills || []).join(', ')}.`,
     skills: `Organize and improve this skills list for ATS compatibility. Return as a comma-separated list of skills.`,
@@ -357,7 +359,7 @@ async function handleStreamEnhanceSection(req, res) {
 
   const systemPrompt = sectionPrompts[section] || 'Improve this resume content professionally.'
 
-  const prompt = `${systemPrompt}
+  const prompt = `${systemPrompt}${customPrompt ? `\n\nUser instructions (follow when consistent with factual accuracy): ${customPrompt}` : ''}
 
 Content to improve:
 "${content}"
@@ -415,6 +417,8 @@ router.post('/enhance', optionalAuth, async (req, res) => {
     return res.status(400).json({ error: 'section and content are required.' })
   }
 
+  const customPrompt = typeof context?.customPrompt === 'string' ? context.customPrompt.trim().slice(0, 1000) : ''
+
   const sectionPrompts = {
     summary: `Improve this professional summary to be ATS-friendly and impactful (3-4 sentences). Role: ${context?.role || 'Professional'}. Skills: ${(context?.skills || []).join(', ')}.`,
     skills: `Organize and improve this skills list for ATS compatibility. Return as a comma-separated list of skills.`,
@@ -424,7 +428,7 @@ router.post('/enhance', optionalAuth, async (req, res) => {
 
   const systemPrompt = sectionPrompts[section] || 'Improve this resume content professionally.'
 
-  const prompt = `${systemPrompt}
+  const prompt = `${systemPrompt}${customPrompt ? `\n\nUser instructions (follow when consistent with factual accuracy): ${customPrompt}` : ''}
 
 Content to improve:
 "${content}"

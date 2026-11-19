@@ -41,7 +41,7 @@ export default function Navbar() {
   return (
     <nav className="site-nav" ref={nav} aria-label="Main navigation">
       <div className="nav-inner">
-        <Link className="site-brand" to="/"><FileText size={24} aria-hidden="true" />ResumeAI Pro</Link>
+        <Link className="site-brand" to="/"><FileText size={24} aria-hidden="true" />DailyResumeAI</Link>
         <button className="nav-icon nav-theme" onClick={toggleTheme} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
           {isDark ? <Sun size={19} /> : <Moon size={19} />}
         </button>

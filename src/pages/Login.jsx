@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2, ArrowLeft, RefreshCw } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -327,11 +327,13 @@ export default function Login() {
           )}
         </div>
 
-        <p className="text-center text-slate-600 text-xs mt-5">
-          By continuing, you agree to our{' '}
-          <Link to="/pricing" className="text-purple-400 hover:text-purple-300">Terms</Link>{' '}and{' '}
-          <Link to="/pricing" className="text-purple-400 hover:text-purple-300">Privacy Policy</Link>
-        </p>
+        {import.meta.env.VITE_TERMS_URL && import.meta.env.VITE_PRIVACY_URL && (
+          <p className="text-center text-[var(--ui-muted)] text-xs mt-5">
+            By continuing, you agree to our{' '}
+            <a href={import.meta.env.VITE_TERMS_URL} className="underline">Terms</a> and{' '}
+            <a href={import.meta.env.VITE_PRIVACY_URL} className="underline">Privacy Policy</a>.
+          </p>
+        )}
       </div>
     </div>
   )

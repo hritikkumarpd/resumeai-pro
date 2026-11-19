@@ -50,5 +50,9 @@
   "Source Sans 3": {
     "family": "\"Source Sans 3\", sans-serif",
     "stylesheet": "https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Computer Modern Roman": {
+    "family": "\"Computer Modern Roman\", \"CMU Serif\", serif",
+    "stylesheet": "/fonts/computer-modern/roman.css"
   }
 }

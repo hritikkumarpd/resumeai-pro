@@ -127,7 +127,7 @@ export const resumeStorage = {
       created_at: payload.created_at || now,
     }
 
-    // 1. Save to local storage (instant & guaranteed)
+    // Cache immediately when browser storage is available.
     const existingIndex = localResumes.findIndex(r => r.id === resumeId)
     let updatedLocal
     if (existingIndex >= 0) {
@@ -136,7 +136,7 @@ export const resumeStorage = {
     } else {
       updatedLocal = [resumeRecord, ...localResumes]
     }
-    localStorage.setItem(localKey, JSON.stringify(updatedLocal))
+    const cached = writeLocal(localKey, updatedLocal)
 
     // 2. Attempt cloud save to Supabase backend
     let savedToCloud = false
@@ -193,6 +193,7 @@ export const resumeStorage = {
       }
     }
 
+    if (!cached && !savedToCloud) throw new Error(cloudError || 'Unable to save this resume.')
     return {
       ...resumeRecord,
       savedToCloud,
@@ -206,19 +207,10 @@ export const resumeStorage = {
   async delete(id, user) {
     const userId = user?.id || 'guest'
     const localKey = getStorageKey(userId)
-    const localResumes = readLocal(localKey)
-
-    const updated = localResumes.filter(r => r.id !== id)
-    writeLocal(localKey, updated)
-
-    try {
-      if (user?.id && !id.startsWith('res_')) {
-        await resumeApi.delete(id)
-      }
-    } catch (err) {
-      console.warn('Cloud delete failed, local copy removed:', err?.message)
-    }
-
+    const remote = user?.id && !id.startsWith('res_')
+    if (remote) await resumeApi.delete(id)
+    const updated = readLocal(localKey).filter(record => record.id !== id)
+    if (!writeLocal(localKey, updated)) throw new Error('Could not remove the local copy.')
     return true
   },
 
@@ -228,25 +220,13 @@ export const resumeStorage = {
   async rename(id, newTitle, user) {
     const userId = user?.id || 'guest'
     const localKey = getStorageKey(userId)
-    const localResumes = readLocal(localKey)
-    const now = new Date().toISOString()
-
-    const updated = localResumes.map(r => {
-      if (r.id === id) {
-        return { ...r, title: newTitle || 'My Resume', updated_at: now }
-      }
-      return r
-    })
-    localStorage.setItem(localKey, JSON.stringify(updated))
-
-    if (user?.id && !id.startsWith('res_')) {
-      try {
-        await resumeApi.update(id, { title: newTitle || 'My Resume' })
-      } catch (err) {
-        console.warn('Cloud rename sync failed, saved in local storage:', err?.message)
-      }
-    }
-
+    const title = newTitle || 'My Resume'
+    const remote = user?.id && !id.startsWith('res_')
+    if (remote) await resumeApi.update(id, { title })
+    const updated = readLocal(localKey).map(record => record.id === id
+      ? { ...record, title, updated_at: new Date().toISOString() }
+      : record)
+    if (!writeLocal(localKey, updated) && !remote) throw new Error('Could not rename the local draft.')
     return updated.find(r => r.id === id)
   },
 
@@ -283,8 +263,7 @@ export const resumeStorage = {
       } else {
         localResumes.unshift(resumeRecord)
       }
-      writeLocal(localKey, localResumes)
-      return resumeRecord
+      return writeLocal(localKey, localResumes) ? resumeRecord : null
     } catch (err) {
       console.error('saveLocal failed:', err)
       return null

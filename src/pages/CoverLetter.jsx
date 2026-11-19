@@ -91,13 +91,16 @@ export default function CoverLetter() {
           setLetter(accumulated)
         },
         onDone: (result, fullText) => {
-          const finalLetter = fullText || result?.letter || accumulated
+          const finalLetter = result?.letter || fullText || accumulated
+          setIsAi(result?.source !== 'template')
+          if (!finalLetter.trim()) throw new Error('No letter received from the AI service.')
           setLetter(finalLetter)
           setGenerating(false)
           setGenerated(true)
 
           // Automatically persist to user's dashboard if logged in
           if (user) {
+            setSaving(true)
             coverLetterApi.create({
               title: `${data.role || 'Job'} Cover Letter (${data.company || 'General'})`,
               content: finalLetter,
@@ -106,16 +109,9 @@ export default function CoverLetter() {
               tone,
             }).then(() => setSaved(true))
               .catch(saveErr => console.warn('Auto-save cover letter skipped:', saveErr?.message))
+              .finally(() => setSaving(false))
           }
         },
-        onError: (err) => {
-          console.warn('Streaming error, using template fallback:', err.message)
-          setIsAi(false)
-          const fallback = generateLetter({ ...data, tone })
-          setLetter(fallback)
-          setGenerating(false)
-          setGenerated(true)
-        }
       })
     } catch (err) {
       console.warn('Cover letter generation exception:', err.message)
@@ -139,7 +135,7 @@ export default function CoverLetter() {
         tone,
       })
       setSaved(true)
-      setTimeout(() => setSaved(false), 3500)
+
     } catch (err) {
       console.error('Failed to save cover letter:', err)
     } finally {
@@ -284,6 +280,7 @@ export default function CoverLetter() {
                         <CheckCircle size={13} className="text-emerald-400" /> Generated
                       </span>
                     )}
+                    {!isAi && <span>Template draft · AI unavailable</span>}
                     {isAi && (
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1 ml-1.5">
                         <Sparkles size={11} className="text-cyan-400" /> Gemini AI
@@ -293,7 +290,7 @@ export default function CoverLetter() {
                   {user && (
                     <button
                       onClick={handleManualSave}
-                      disabled={saving}
+                      disabled={saving || saved}
                       className="btn-secondary text-xs px-3 py-2 rounded-lg gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       <Save size={12} className={saved ? 'text-emerald-400' : 'text-purple-400'} />

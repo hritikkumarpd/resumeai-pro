@@ -1803,7 +1803,7 @@ export default function Builder() {
 <head>
   <title>Resume</title>
   <meta charset="utf-8" />
-  <link rel="stylesheet" href="${resumeFonts[font].stylesheet}">
+  <link rel="stylesheet" href="${new URL(resumeFonts[font].stylesheet, window.location.origin).href}">
   <style>
     ${extractedCSS}
   </style>
@@ -1944,9 +1944,9 @@ export default function Builder() {
 
       const triggerPrint = () => {
         setIsGeneratingPdf(false)
-        // Update quota for browser print fallback too
+        // The server rolls back failed renders. Refresh its authoritative count.
         if (!exportQuota.unlimited) {
-          setExportQuota(prev => ({ ...prev, used: prev.used + 1 }))
+          pdfApi.quota().then(({ data }) => setExportQuota(data)).catch(() => {})
         }
         iframe.contentWindow.focus()
         iframe.contentWindow.print()
@@ -1975,10 +1975,12 @@ export default function Builder() {
     let css = ''
     try {
       for (const sheet of document.styleSheets) {
+        if (sheet.ownerNode?.hasAttribute('data-resume-font')) continue
         try {
           const rules = sheet.cssRules || sheet.rules
           if (!rules) continue
           for (const rule of rules) {
+            if (rule.type === CSSRule.IMPORT_RULE) continue
             css += rule.cssText + '\n'
           }
         } catch (e) {
@@ -2010,7 +2012,7 @@ export default function Builder() {
 
   return (
     <div className="builder-workspace flex flex-col h-screen overflow-hidden" style={{ paddingTop: 72, background: isLight ? '#f8fafc' : '#080920' }}>
-      <link rel="stylesheet" href={resumeFonts[font].stylesheet} />
+      <link rel="stylesheet" data-resume-font="" href={resumeFonts[font].stylesheet} />
       {/* ── Global Sub-Header Bar (Template Selector, Font Size, View Mode, Zoom, Theme, Download) ── */}
       <header className="px-2.5 sm:px-4 py-2 border-b flex items-center justify-between gap-2 flex-wrap z-20 flex-shrink-0 transition-colors"
               style={{ background: isLight ? '#ffffff' : '#0c0e29', borderColor: isLight ? '#e2e8f0' : 'rgba(124,58,237,.2)' }}>

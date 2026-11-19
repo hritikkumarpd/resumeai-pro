@@ -4,30 +4,10 @@ const { supabaseAdmin } = require('../lib/supabase')
 const { isPaidPlan } = require('../config/plans')
 
 const resumeFonts = require('../config/resumeFonts.json')
-const fs = require('fs')
+const launchPdfBrowser = require('../lib/pdfBrowser')
 const net = require('net')
 
 const FREE_EXPORT_LIMIT = 3
-
-function getChromeExecutablePath() {
-  if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
-    return process.env.PUPPETEER_EXECUTABLE_PATH
-  }
-  const paths = [
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/chromium',
-  ]
-  for (const p of paths) {
-    if (fs.existsSync(p)) return p
-  }
-  return undefined
-}
 
 /* ── SSRF Security: Host & IP Validator ────────────────────────── */
 
@@ -330,19 +310,7 @@ router.post('/render-html', requireAuth, async (req, res) => {
 
   let browser = null
   try {
-    const puppeteer = require('puppeteer')
-    const executablePath = getChromeExecutablePath()
-    browser = await puppeteer.launch({
-      executablePath,
-      headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--font-render-hinting=medium'
-      ],
-    })
+    browser = await launchPdfBrowser()
 
     const page = await browser.newPage()
 
@@ -437,13 +405,7 @@ router.post('/generate', requireAuth, async (req, res) => {
 
   let browser = null
   try {
-    const puppeteer = require('puppeteer')
-    const executablePath = getChromeExecutablePath()
-    browser = await puppeteer.launch({
-      executablePath,
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    })
+    browser = await launchPdfBrowser()
 
     const page = await browser.newPage()
 
@@ -535,7 +497,7 @@ function buildResumeHtml(d, accent, font) {
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('${typeface.stylesheet}');
+  @import url('${new URL(typeface.stylesheet, process.env.FRONTEND_URL || 'https://www.dailyresumeai.online').href}');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: ${typeface.family}; font-size: 9pt; color: #1e293b; background: white; }
   a { color: inherit; text-decoration: none; }

@@ -39,3 +39,5 @@ SECURITY-AUDIT-*.md
 .vercel
 Untitled*.txt
 
+
+/server/.cache/

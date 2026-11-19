@@ -9,11 +9,11 @@ export default function Footer() {
   return (
     <footer className="site-footer">
       <div>
-        <Link to="/" className="site-brand">ResumeAI Pro</Link>
+        <Link to="/" className="site-brand">DailyResumeAI</Link>
         <nav aria-label="Footer navigation">
           {links.map(([to, label]) => <Link key={to} to={to}>{label}</Link>)}
         </nav>
-        <small>© {new Date().getFullYear()} ResumeAI Pro</small>
+        <small>© {new Date().getFullYear()} DailyResumeAI</small>
       </div>
     </footer>
   )

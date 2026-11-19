@@ -13,6 +13,7 @@ import CoverLetter  from './pages/CoverLetter'
 import Pricing      from './pages/Pricing'
 import Admin        from './pages/Admin'
 import ResetPassword from './pages/ResetPassword'
+import PageMetadata from './components/layout/PageMetadata'
 import './App.css'
 
 /* ── Protected Route ────────────────────────────────────────── */
@@ -106,7 +107,7 @@ function CanonicalDomainGuard() {
     const host = window.location.hostname
     const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.endsWith('.local')
     if (!isLocal && host !== CANONICAL_DOMAIN && host !== `www.${CANONICAL_DOMAIN}`) {
-      const targetUrl = `https://${CANONICAL_DOMAIN}${window.location.pathname}${window.location.search}${window.location.hash}`
+      const targetUrl = `https://www.${CANONICAL_DOMAIN}${window.location.pathname}${window.location.search}${window.location.hash}`
       window.location.replace(targetUrl)
       return null
     }
@@ -118,6 +119,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <CanonicalDomainGuard />
+      <PageMetadata />
       <ThemeProvider>
         <AuthProvider>
           <AppRoutes />

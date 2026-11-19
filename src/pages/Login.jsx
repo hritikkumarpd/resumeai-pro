@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2, ArrowLeft, RefreshCw } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const [tab,           setTab]           = useState('login') // 'login' | 'register'
+  const [params] = useSearchParams()
+  const [tab,           setTab]           = useState(params.get('mode') === 'register' ? 'register' : 'login') // 'login' | 'register'
   const [showPass,      setShowPass]      = useState(false)
   const [apiError,      setApiError]      = useState('')
   const [loading,       setLoading]       = useState(false)
@@ -17,6 +18,8 @@ export default function Login() {
 
   const { signIn, signUp, signInWithGoogle, forgotPassword } = useAuth()
   const navigate = useNavigate()
+  const { state } = useLocation()
+  const returnTo = state?.returnTo || '/dashboard'
   const { register, handleSubmit, formState: { errors }, reset, watch } = useForm()
   const emailValue = watch('email') || ''
 
@@ -38,7 +41,7 @@ export default function Login() {
       } else {
         await signUp({ email: data.email, password: data.password, full_name: data.name })
       }
-      navigate('/dashboard')
+      navigate(returnTo, { replace: true })
     } catch (err) {
       setApiError(err.message || 'Authentication failed. Please check your credentials.')
     } finally {
@@ -48,7 +51,7 @@ export default function Login() {
 
   const handleGoogle = async () => {
     try {
-      await signInWithGoogle()
+      await signInWithGoogle(returnTo)
     } catch (err) {
       setApiError(err.message || 'Google sign-in failed.')
     }
@@ -87,16 +90,16 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => setForgotMode(false)}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors mb-6 cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs text-[var(--ui-muted)] hover:text-[var(--ui-text)] transition-colors mb-6 cursor-pointer"
               >
                 <ArrowLeft size={14} /> Back to Sign In
               </button>
 
               <div className="text-center mb-6">
-                <h1 className="font-heading font-extrabold text-2xl text-white mb-2">
+                <h1 className="font-heading font-extrabold text-2xl text-[var(--ui-text)] mb-2">
                   Reset Password
                 </h1>
-                <p className="text-slate-400 text-sm">
+                <p className="text-[var(--ui-muted)] text-sm">
                   Enter your email address and we will send you a link to reset your password.
                 </p>
               </div>
@@ -117,7 +120,7 @@ export default function Login() {
 
               <form onSubmit={handleForgotPassword} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-slate-400">Email Address</label>
+                  <label className="text-xs font-medium text-[var(--ui-muted)]">Email Address</label>
                   <div className="relative">
                     <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input
@@ -154,10 +157,10 @@ export default function Login() {
             /* ── Sign In / Sign Up View ───────────────────────────────── */
             <>
               <div className="text-center mb-8">
-                <h1 className="font-heading font-extrabold text-2xl text-white mb-2">
+                <h1 className="font-heading font-extrabold text-2xl text-[var(--ui-text)] mb-2">
                   {tab === 'login' ? 'Welcome Back' : 'Create Your Account'}
                 </h1>
-                <p className="text-slate-400 text-sm">
+                <p className="text-[var(--ui-muted)] text-sm">
                   {tab === 'login'
                     ? 'Sign in to access your resumes and ATS scores'
                     : 'Build FAANG-ready resumes with real-time AI scoring'}
@@ -172,7 +175,7 @@ export default function Login() {
                   className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 cursor-pointer ${
                     tab === 'login'
                       ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-[var(--ui-muted)] hover:text-[var(--ui-text)]'
                   }`}
                 >
                   Sign In
@@ -183,7 +186,7 @@ export default function Login() {
                   className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 cursor-pointer ${
                     tab === 'register'
                       ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-[var(--ui-muted)] hover:text-[var(--ui-text)]'
                   }`}
                 >
                   Sign Up Free
@@ -226,8 +229,8 @@ export default function Login() {
               <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
                 {tab === 'register' && (
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-400">Full Name</label>
-                    <input
+                    <label htmlFor="login-field-1" className="text-xs font-medium text-[var(--ui-muted)]">Full Name</label>
+                    <input id="login-field-1"
                       {...register('name', { required: 'Full name is required' })}
                       placeholder="Enter your full name"
                       className={`form-input ${errors.name ? 'border-red-500' : ''}`}
@@ -237,7 +240,7 @@ export default function Login() {
                 )}
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-slate-400">Email Address</label>
+                  <label className="text-xs font-medium text-[var(--ui-muted)]">Email Address</label>
                   <div className="relative">
                     <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input
@@ -254,9 +257,9 @@ export default function Login() {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-slate-400">Password</label>
+                  <label htmlFor="login-field-2" className="text-xs font-medium text-[var(--ui-muted)]">Password</label>
                   <div className="relative">
-                    <input
+                    <input id="login-field-2"
                       {...register('password', {
                         required: 'Password is required',
                         minLength: { value: 6, message: 'Minimum 6 characters' }
@@ -268,7 +271,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => setShowPass(v => !v)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[var(--ui-secondary)] transition-colors"
                     >
                       {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>

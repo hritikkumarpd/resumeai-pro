@@ -1,3 +1,4 @@
+import BuilderDialog from './BuilderDialog'
 import React, { useState } from 'react'
 import { BookOpen, Check, X, Sparkles, ArrowRight, UserCheck, Briefcase } from 'lucide-react'
 
@@ -7,7 +8,7 @@ export default function RolePresetsModal({ presets, onSelectPreset, onClose, isL
   const currentPreset = presets.find(p => p.id === selectedId) || presets[0]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <BuilderDialog label="Role presets" onClose={onClose}>
       <div
         className="w-full max-w-3xl rounded-2xl p-6 shadow-2xl border flex flex-col max-h-[90vh]"
         style={{
@@ -195,6 +196,6 @@ export default function RolePresetsModal({ presets, onSelectPreset, onClose, isL
           </div>
         </div>
       </div>
-    </div>
+    </BuilderDialog>
   )
 }

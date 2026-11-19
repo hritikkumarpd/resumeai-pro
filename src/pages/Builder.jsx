@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useId, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   Download, Eye, ChevronDown, ChevronUp, Plus, Trash2,
   Zap, Palette, Type, LayoutTemplate, Brain, Target,
   ZoomIn, ZoomOut, Columns, Edit3, Sparkles,
-  ArrowUp, ArrowDown, Camera, X, Check, Sun, Moon,
+  ArrowUp, ArrowDown, Camera, X, Check,
   Sliders, RotateCcw, RotateCw, SunDim, Contrast, Save, FileText, Edit2,
   AlertCircle, Loader2, RefreshCw, Shield, BookOpen, Search, Upload, Copy,
   CheckCheck
@@ -164,14 +164,15 @@ function EditorSection({
 
 /* ── Small input ────────────────────────────────────────────── */
 function Field({ label, value, onChange, placeholder, multiline }) {
+  const id = useId()
   const cls = "form-input text-xs py-2 px-3 w-full"
   return (
     <div className="flex flex-col gap-1 w-full">
-      {label && <label className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">{label}</label>}
+      {label && <label htmlFor={id} className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">{label}</label>}
       {multiline
-        ? <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        ? <textarea id={id} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
                     className={`${cls} resize-none`} rows={3} />
-        : <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={cls} />
+        : <input id={id} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={cls} />
       }
     </div>
   )
@@ -1124,7 +1125,7 @@ export default function Builder() {
   const { id: pathId } = useParams()
   const resumeIdFromUrl = searchParams.get('id') || pathId
 
-  const { theme, toggleTheme, isDark } = useTheme()
+  const { theme } = useTheme()
   const isLight = theme === 'light'
 
   const { user, profile, getUserDefaults, updateProfile } = useAuth()
@@ -1990,24 +1991,32 @@ export default function Builder() {
     return css
   }
 
-  // Auto-fit zoom to available preview width
-  const handleFitZoom = () => {
-    if (previewContainerRef.current) {
-      const containerWidth = previewContainerRef.current.clientWidth - 48
-      const calculatedZoom = Math.min(Math.max(Math.round((containerWidth / A4_WIDTH_PX) * 95), 45), 100)
-      setZoom(calculatedZoom)
+  const handleFitZoom = useCallback(() => {
+    const canvas = previewContainerRef.current
+    if (!canvas?.clientWidth) return
+    const padding = window.innerWidth < 768 ? 32 : 64
+    setZoom(Math.max(10, Math.min(100, Math.floor((canvas.clientWidth - padding) * 100 / A4_WIDTH_PX))))
+  }, [])
+
+  useEffect(() => {
+    if (viewMode !== 'preview') return
+    const fitOnSmallScreens = () => {
+      if (window.innerWidth < 1024) handleFitZoom()
     }
-  }
+    fitOnSmallScreens()
+    window.addEventListener('resize', fitOnSmallScreens)
+    return () => window.removeEventListener('resize', fitOnSmallScreens)
+  }, [viewMode, handleFitZoom])
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ paddingTop: 72, background: isLight ? '#f8fafc' : '#080920' }}>
+    <div className="builder-workspace flex flex-col h-screen overflow-hidden" style={{ paddingTop: 72, background: isLight ? '#f8fafc' : '#080920' }}>
       <link rel="stylesheet" href={resumeFonts[font].stylesheet} />
       {/* ── Global Sub-Header Bar (Template Selector, Font Size, View Mode, Zoom, Theme, Download) ── */}
-      <header className="px-2.5 sm:px-4 py-2 border-b flex items-center justify-between gap-2 overflow-x-auto scrollbar-none z-20 flex-shrink-0 transition-colors"
+      <header className="px-2.5 sm:px-4 py-2 border-b flex items-center justify-between gap-2 flex-wrap z-20 flex-shrink-0 transition-colors"
               style={{ background: isLight ? '#ffffff' : '#0c0e29', borderColor: isLight ? '#e2e8f0' : 'rgba(124,58,237,.2)' }}>
         
         {/* Left: Resume Title / Name & Template / Font Selector */}
-        <div className="flex items-center gap-2 flex-nowrap">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Resume Name / Title input (e.g. Data Science Resume, AIML Resume) */}
           <div
             className={`flex items-center gap-1.5 border rounded-lg px-2.5 py-1 shadow-sm transition-all ${
@@ -2116,7 +2125,7 @@ export default function Builder() {
             <span>Editor</span>
           </button>
           <button onClick={() => setViewMode('split')}
-                  className={`hidden md:flex items-center gap-1 px-3 py-1 text-xs rounded-md font-medium transition-all ${
+                  className={`hidden lg:flex items-center gap-1 px-3 py-1 text-xs rounded-md font-medium transition-all ${
                     viewMode === 'split'
                       ? 'bg-purple-600 text-white shadow-sm'
                       : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'
@@ -2136,29 +2145,7 @@ export default function Builder() {
         </div>
 
         {/* Right: AI Active Badge, Theme toggle, Zoom controls & Print PDF Button */}
-        <div className="flex items-center gap-2">
-          {/* Theme Toggle Button */}
-          <button onClick={toggleTheme}
-                  title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                  className={`hidden sm:flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg font-medium transition-all ${
-                    isLight
-                      ? 'bg-slate-100 hover:bg-slate-200 text-amber-600 border border-slate-300'
-                      : 'bg-[#141740] hover:bg-[#1e235e] text-amber-400 border border-purple-500/20 shadow-inner'
-                  }`}>
-            {isDark ? <Sun size={13} className="text-amber-400" /> : <Moon size={13} className="text-indigo-600" />}
-            <span className="hidden sm:inline">{isDark ? 'Light' : 'Dark'}</span>
-          </button>
-
-          {/* AI Active Badge (Server-side — no user configuration needed) */}
-          <div
-            title="AI Resume Intelligence Active (Powered by server-side AI)"
-            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 shadow-sm"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <Sparkles size={12} className="text-emerald-400" />
-            <span className="hidden sm:inline font-semibold">AI Active</span>
-          </div>
-
+        <div className="builder-actions flex flex-wrap items-center gap-2">
           {/* Zoom controls */}
           <div className={`hidden xl:flex items-center gap-1 border rounded-lg px-2 py-1 transition-colors ${
             isLight ? 'bg-slate-100 border-slate-300' : 'bg-[#141740] border-purple-500/20'

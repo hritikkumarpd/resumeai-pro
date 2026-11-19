@@ -1,3 +1,4 @@
+import BuilderDialog from './BuilderDialog'
 import React from 'react'
 import { Target, CheckCircle2, AlertCircle, X, Sparkles, Zap, Award } from 'lucide-react'
 
@@ -8,7 +9,7 @@ export default function AtsAuditModal({ audit, onClose, onOptimizeSummary, isLig
   const scoreColor = score >= 85 ? '#10B981' : score >= 70 ? '#F59E0B' : '#EF4444'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <BuilderDialog label="ATS audit" onClose={onClose}>
       <div
         className="w-full max-w-2xl rounded-2xl p-6 shadow-2xl border flex flex-col max-h-[90vh]"
         style={{
@@ -188,6 +189,6 @@ export default function AtsAuditModal({ audit, onClose, onOptimizeSummary, isLig
           </button>
         </div>
       </div>
-    </div>
+    </BuilderDialog>
   )
 }

@@ -175,7 +175,7 @@ export default function CoverLetter() {
           <h1 className="font-heading font-extrabold mb-3" style={{ fontSize: 'clamp(2rem,4vw,3.5rem)' }}>
             Generate a <span className="gradient-text">winning cover letter</span> in seconds
           </h1>
-          <p className="text-slate-400 max-w-lg mx-auto">Fill in the details, choose your tone, and our AI writes a personalized cover letter instantly.</p>
+          <p className="text-[var(--ui-muted)] max-w-lg mx-auto">Fill in the details, choose your tone, and our AI writes a personalized cover letter instantly.</p>
         </div>
       </section>
 
@@ -187,41 +187,41 @@ export default function CoverLetter() {
             <div className="lg:col-span-2">
               <form onSubmit={handleSubmit(generate)}
                     className="p-6 rounded-2xl flex flex-col gap-4 sticky top-24"
-                    style={{ background: '#111338', border: '1px solid rgba(124,58,237,.25)' }}>
+                    style={{ background: 'var(--bg-card)', border: '1px solid rgba(124,58,237,.25)' }}>
                 <h2 className="font-heading font-bold text-lg flex items-center gap-2">
                   <Mail size={18} className="text-purple-400" /> Your Details
                 </h2>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-slate-400">Your Full Name *</label>
-                  <input {...register('name', { required: true })} placeholder="e.g. Rahul Sharma" className="form-input" />
+                  <label htmlFor="coverletter-field-1" className="text-xs font-medium text-[var(--ui-muted)]">Your Full Name *</label>
+                  <input id="coverletter-field-1" {...register('name', { required: true })} placeholder="e.g. Rahul Sharma" className="form-input" />
                   {errors.name && <span className="text-red-400 text-xs">Required</span>}
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-slate-400">Job Title Applying For *</label>
-                  <input {...register('role', { required: true })} placeholder="Senior Software Engineer" className="form-input" />
+                  <label htmlFor="coverletter-field-2" className="text-xs font-medium text-[var(--ui-muted)]">Job Title Applying For *</label>
+                  <input id="coverletter-field-2" {...register('role', { required: true })} placeholder="Senior Software Engineer" className="form-input" />
                   {errors.role && <span className="text-red-400 text-xs">Required</span>}
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-slate-400">Company Name *</label>
-                  <input {...register('company', { required: true })} placeholder="Google" className="form-input" />
+                  <label htmlFor="coverletter-field-3" className="text-xs font-medium text-[var(--ui-muted)]">Company Name *</label>
+                  <input id="coverletter-field-3" {...register('company', { required: true })} placeholder="Google" className="form-input" />
                   {errors.company && <span className="text-red-400 text-xs">Required</span>}
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-slate-400">Key Skills (comma-separated)</label>
-                  <input {...register('skills')} placeholder="React, Python, Leadership, AWS" className="form-input" />
+                  <label htmlFor="coverletter-field-4" className="text-xs font-medium text-[var(--ui-muted)]">Key Skills (comma-separated)</label>
+                  <input id="coverletter-field-4" {...register('skills')} placeholder="React, Python, Leadership, AWS" className="form-input" />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-slate-400">Years of Experience</label>
-                  <input {...register('experience')} placeholder="5 years" className="form-input" />
+                  <label htmlFor="coverletter-field-5" className="text-xs font-medium text-[var(--ui-muted)]">Years of Experience</label>
+                  <input id="coverletter-field-5" {...register('experience')} placeholder="5 years" className="form-input" />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-slate-400">Tone</label>
+                  <label className="text-xs font-medium text-[var(--ui-muted)]">Tone</label>
                   <div className="grid grid-cols-2 gap-2">
                     {TONES.map(t => (
                       <button key={t} type="button" onClick={() => setTone(t)}
@@ -236,8 +236,8 @@ export default function CoverLetter() {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-slate-400">Custom Instructions / Prompt (optional)</label>
-                  <textarea
+                  <label htmlFor="coverletter-field-6" className="text-xs font-medium text-[var(--ui-muted)]">Custom Instructions / Prompt (optional)</label>
+                  <textarea id="coverletter-field-6"
                     {...register('customPrompt')}
                     placeholder="e.g. Emphasize full-stack React experience and startup adaptability."
                     rows={2}
@@ -274,13 +274,13 @@ export default function CoverLetter() {
 
               {generated && (
                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <span className="text-xs text-slate-400 flex items-center gap-1.5 mr-auto">
+                  <span className="text-xs text-[var(--ui-muted)] flex items-center gap-1.5 mr-auto">
                     {saved ? (
                       <span className="text-emerald-400 flex items-center gap-1 font-medium">
                         <CheckCircle2 size={13} /> Saved to Dashboard
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1 text-slate-400">
+                      <span className="flex items-center gap-1 text-[var(--ui-muted)]">
                         <CheckCircle size={13} className="text-emerald-400" /> Generated
                       </span>
                     )}
@@ -316,7 +316,7 @@ export default function CoverLetter() {
               )}
 
               {/* Letter output */}
-              <div className="rounded-2xl overflow-hidden" style={{ background: '#111338', border: '1px solid rgba(124,58,237,.25)', minHeight: 500 }}>
+              <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid rgba(124,58,237,.25)', minHeight: 500 }}>
                 {!letter && !generating ? (
                   <div className="flex flex-col items-center justify-center h-96 text-center px-8">
                     <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
@@ -332,7 +332,7 @@ export default function CoverLetter() {
                       <div className="absolute top-0 left-0 right-0 h-0.5"
                            style={{ background: 'linear-gradient(90deg,#7C3AED,#06B6D4)', animation: 'shimmer 1s linear infinite', backgroundSize: '200%' }} />
                     )}
-                    <pre className="font-sans text-slate-200 text-sm leading-relaxed whitespace-pre-wrap">
+                    <pre className="font-sans text-[var(--ui-text)] text-sm leading-relaxed whitespace-pre-wrap">
                       {letter}
                       {generating && (
                         <span className="inline-block w-2 h-4 ml-1 bg-cyan-400 animate-pulse align-middle rounded-sm shadow-[0_0_8px_#22d3ee]" />
@@ -348,8 +348,8 @@ export default function CoverLetter() {
                 <div className="mt-4 p-4 rounded-xl flex gap-3 text-sm"
                      style={{ background: 'rgba(124,58,237,.08)', border: '1px solid rgba(124,58,237,.2)' }}>
                   <Sparkles size={14} className="text-purple-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-slate-400 text-xs leading-relaxed">
-                    <strong className="text-slate-300">Pro tip:</strong> Personalize this letter by adding specific details about the company, mentioning a recent product or news, and tailoring the skills section to match the exact job requirements.
+                  <p className="text-[var(--ui-muted)] text-xs leading-relaxed">
+                    <strong className="text-[var(--ui-secondary)]">Pro tip:</strong> Personalize this letter by adding specific details about the company, mentioning a recent product or news, and tailoring the skills section to match the exact job requirements.
                   </p>
                 </div>
               )}

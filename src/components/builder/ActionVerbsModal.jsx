@@ -1,3 +1,4 @@
+import BuilderDialog from './BuilderDialog'
 import React, { useState } from 'react'
 import { Zap, Copy, Check, X } from 'lucide-react'
 
@@ -14,7 +15,7 @@ export default function ActionVerbsModal({ categories, onClose, isLight }) {
   const currentCategory = categories.find(c => c.category === activeTab) || categories[0]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <BuilderDialog label="Action verbs" onClose={onClose}>
       <div
         className="w-full max-w-2xl rounded-2xl p-6 shadow-2xl border flex flex-col max-h-[85vh]"
         style={{
@@ -131,6 +132,6 @@ export default function ActionVerbsModal({ categories, onClose, isLight }) {
           </button>
         </div>
       </div>
-    </div>
+    </BuilderDialog>
   )
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Eye, ArrowRight, Star, Filter, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, Star } from 'lucide-react'
 
 const FILTERS = ['All', 'ATS-Safe', 'Photo Resume', 'Tech & SDE', 'College & Fresher', 'Corporate & MNC', 'Executive & Lead']
 
@@ -386,20 +386,9 @@ function TemplateMock({ type }) {
 }
 
 function TemplateCard({ tpl }) {
-  const [hovered, setHovered] = useState(false)
-
   return (
-    <div className="rounded-2xl overflow-hidden cursor-pointer group transition-all duration-300 hover:-translate-y-1.5"
-         style={{
-           border: hovered ? '2px solid #10B981' : '1px solid rgba(124,58,237,.25)',
-           boxShadow: hovered ? '0 12px 30px rgba(16,185,129,.2)' : 'none',
-           background: '#111338'
-         }}
-         onMouseEnter={() => setHovered(true)}
-         onMouseLeave={() => setHovered(false)}>
-      
-      {/* Preview */}
-      <div className="relative" style={{ height: 260 }}>
+    <article className="template-card">
+      <div className="relative h-[260px] overflow-hidden">
         <TemplateMock type={tpl.type} />
 
         {/* Top badge */}
@@ -408,35 +397,23 @@ function TemplateCard({ tpl }) {
           {tpl.badge}
         </div>
 
-        {/* Hover overlay */}
-        <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2.5 transition-all duration-200 ${hovered ? 'opacity-100' : 'opacity-0'}`}
-             style={{ background: 'rgba(9, 10, 32, 0.9)', backdropFilter: 'blur(4px)' }}>
-          <div className="text-center px-4 mb-1">
-            <div className="text-xs font-bold text-white mb-0.5">{tpl.name}</div>
-            <div className="text-[11px] text-emerald-400">100% Black & White ATS Standard</div>
-          </div>
-          <Link to={`/builder?template=${encodeURIComponent(tpl.name)}`}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs text-white btn-primary">
-            <ArrowRight size={13} /> Use This Template
-          </Link>
-        </div>
       </div>
 
       {/* Info */}
-      <div className="p-3.5 border-t border-white/5" style={{ background: '#0D0F2E' }}>
+      <div className="p-3.5 border-t border-white/5" style={{ background: 'var(--bg-secondary)' }}>
         <div className="flex items-start justify-between gap-2 mb-1">
-          <div className="font-bold text-sm text-slate-200">{tpl.name}</div>
+          <div className="font-bold text-sm text-[var(--ui-text)]">{tpl.name}</div>
           <div className="flex items-center gap-1 text-xs flex-shrink-0">
             <Star size={11} className="fill-yellow-400 text-yellow-400" />
-            <span className="text-slate-300 font-semibold">{tpl.rating}</span>
+            <span className="text-[var(--ui-secondary)] font-semibold">{tpl.rating}</span>
           </div>
         </div>
-        <div className="text-[11px] text-slate-400 flex items-center justify-between">
-          <span className="truncate max-w-[200px]">{tpl.bestFor}</span>
-          <span className="text-slate-500 flex-shrink-0">{tpl.uses} uses</span>
-        </div>
+        <p className="text-xs text-[var(--ui-muted)]">{tpl.bestFor}</p>
+        <Link className="template-action" to={`/builder?template=${encodeURIComponent(tpl.name)}`} aria-label={`Use ${tpl.name}`}>
+          Use template <ArrowRight size={15} />
+        </Link>
       </div>
-    </div>
+    </article>
   )
 }
 
@@ -453,25 +430,24 @@ export default function Templates() {
         <div className="absolute inset-0 pointer-events-none"
              style={{ background: 'radial-gradient(ellipse at 50% 0%,rgba(124,58,237,.25) 0%,transparent 60%)' }} />
         <div className="max-w-[1200px] mx-auto px-6 relative">
-          <div className="section-tag mb-4 mx-auto w-fit"><CheckCircle2 size={12} /> Top 10 ATS Templates</div>
           <h1 className="font-heading font-extrabold mb-3" style={{ fontSize: 'clamp(2rem,4vw,3.5rem)' }}>
-            Top 10 Most Used <span className="gradient-text">ATS Templates</span>
+            Resume <span className="gradient-text">templates</span>
           </h1>
-          <p className="text-slate-400 max-w-2xl mx-auto text-sm md:text-base">
-            Widely recognized across Indian campus placements (IIT/NIT), IT Services (TCS/Infosys), and global tech firms (FAANG). 100% black & white, non-colorful, and ATS-optimized.
+          <p className="text-[var(--ui-muted)] max-w-2xl mx-auto text-sm md:text-base">
+            Choose a layout for your experience. You can change its font and update your details in the builder.
           </p>
         </div>
       </section>
 
       {/* Filters */}
-      <section className="pb-4 sticky top-[72px] z-30" style={{ background: '#080920', borderBottom: '1px solid rgba(124,58,237,.15)' }}>
+      <section className="pb-4 sticky top-[72px] z-30" style={{ background: 'var(--bg-primary)', borderBottom: '1px solid rgba(124,58,237,.15)' }}>
         <div className="max-w-[1200px] mx-auto px-6 py-3 flex gap-2 overflow-x-auto scrollbar-none">
           {FILTERS.map(f => (
-            <button key={f} onClick={() => setActiveFilter(f)}
+            <button key={f} aria-pressed={activeFilter === f} onClick={() => setActiveFilter(f)}
                     className="px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex-shrink-0 transition-all duration-200"
                     style={activeFilter === f
                       ? { background: 'linear-gradient(135deg,#7C3AED,#A855F7)', color: '#fff', boxShadow: '0 0 15px rgba(124,58,237,.4)' }
-                      : { background: 'rgba(255,255,255,.05)', color: '#94A3B8', border: '1px solid rgba(255,255,255,.07)' }}>
+                      : { background: 'rgba(255,255,255,.05)', color: 'var(--ui-secondary)', border: '1px solid rgba(255,255,255,.07)' }}>
               {f}
             </button>
           ))}

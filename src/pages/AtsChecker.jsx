@@ -103,8 +103,8 @@ function ScoreGauge({ score }) {
                   style={{ transition: 'stroke-dasharray 1.2s ease-in-out' }} />
         </svg>
         <div className="absolute flex flex-col items-center">
-          <span className="font-heading font-extrabold text-4xl text-white">{score}</span>
-          <span className="text-xs text-slate-400">out of 100</span>
+          <span className="font-heading font-extrabold text-4xl text-[var(--ui-text)]">{score}</span>
+          <span className="text-xs text-[var(--ui-muted)]">out of 100</span>
         </div>
       </div>
       <span className="mt-2 text-xs font-semibold px-3 py-1 rounded-full font-heading"
@@ -241,7 +241,7 @@ export default function AtsChecker() {
           <h1 className="font-heading font-extrabold mb-3" style={{ fontSize: 'clamp(2rem,4vw,3.5rem)' }}>
             How well does your resume <span className="gradient-text">match the job?</span>
           </h1>
-          <p className="text-slate-400 max-w-xl mx-auto">
+          <p className="text-[var(--ui-muted)] max-w-xl mx-auto">
             Analyze keyword density, ATS section structure, and role match with our deterministic scoring engine.
           </p>
         </div>
@@ -256,18 +256,18 @@ export default function AtsChecker() {
                 <AlertCircle size={15} className="text-red-400 flex-shrink-0" />
                 <span>{error}</span>
               </div>
-              <button onClick={() => setError(null)} className="text-red-400 hover:text-white font-bold ml-2">×</button>
+              <button aria-label="Dismiss error" onClick={() => setError(null)} className="text-red-400 hover:text-white font-bold ml-2">×</button>
             </div>
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Job Description */}
-            <div className="rounded-2xl overflow-hidden" style={{ background: '#111338', border: '1px solid rgba(124,58,237,.25)' }}>
-              <div className="px-3.5 sm:px-5 py-3 border-b flex flex-wrap items-center justify-between gap-2" style={{ borderColor: 'rgba(124,58,237,.2)', background: '#0D0F2E' }}>
+            <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid rgba(124,58,237,.25)' }}>
+              <div className="px-3.5 sm:px-5 py-3 border-b flex flex-wrap items-center justify-between gap-2" style={{ borderColor: 'rgba(124,58,237,.2)', background: 'var(--bg-secondary)' }}>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Target size={14} className="text-cyan-400 flex-shrink-0" />
                   <span className="font-semibold text-sm">Job Description</span>
-                  <span className="text-[11px] text-slate-400 hidden sm:inline">(Optional for role matching)</span>
+                  <span className="text-[11px] text-[var(--ui-muted)] hidden sm:inline">(Optional for role matching)</span>
                 </div>
                 <button onClick={() => jobFileRef.current?.click()}
                         className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer flex-shrink-0">
@@ -275,18 +275,18 @@ export default function AtsChecker() {
                 </button>
                 <input ref={jobFileRef} type="file" accept=".pdf,.txt,.md" className="hidden" onChange={handleJobDescFile} disabled={uploading} />
               </div>
-              <textarea
+              <textarea aria-label="Job description"
                 value={jobDesc}
                 onChange={e => setJobDesc(e.target.value)}
                 placeholder="Paste the target job description here..."
-                className="w-full p-5 bg-transparent text-slate-300 text-sm leading-relaxed resize-none outline-none"
+                className="w-full p-5 bg-transparent text-[var(--ui-secondary)] text-sm leading-relaxed resize-none outline-none"
                 style={{ minHeight: 300 }}
               />
             </div>
 
             {/* Resume */}
-            <div className="rounded-2xl overflow-hidden" style={{ background: '#111338', border: '1px solid rgba(124,58,237,.25)' }}>
-              <div className="px-3.5 sm:px-5 py-3 border-b flex flex-wrap items-center justify-between gap-2" style={{ borderColor: 'rgba(124,58,237,.2)', background: '#0D0F2E' }}>
+            <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid rgba(124,58,237,.25)' }}>
+              <div className="px-3.5 sm:px-5 py-3 border-b flex flex-wrap items-center justify-between gap-2" style={{ borderColor: 'rgba(124,58,237,.2)', background: 'var(--bg-secondary)' }}>
                 <div className="flex items-center gap-2 flex-wrap">
                   <BarChart2 size={14} className="text-purple-400 flex-shrink-0" />
                   <span className="font-semibold text-sm">Your Resume</span>
@@ -299,11 +299,11 @@ export default function AtsChecker() {
                 </button>
                 <input ref={fileRef} type="file" accept=".pdf,.txt,.md" className="hidden" onChange={handleFile} disabled={uploading} />
               </div>
-              <textarea
+              <textarea aria-label="Resume text"
                 value={resume}
                 onChange={e => setResume(e.target.value)}
                 placeholder="Paste your resume text here or upload a PDF..."
-                className="w-full p-5 bg-transparent text-slate-300 text-sm leading-relaxed resize-none outline-none"
+                className="w-full p-5 bg-transparent text-[var(--ui-secondary)] text-sm leading-relaxed resize-none outline-none"
                 style={{ minHeight: 300 }}
               />
             </div>
@@ -332,11 +332,11 @@ export default function AtsChecker() {
                   <RefreshCw size={32} className="animate-spin text-purple-400" />
                 </div>
               </div>
-              <p className="text-slate-200 text-base font-semibold flex items-center justify-center gap-2">
+              <p className="text-[var(--ui-text)] text-base font-semibold flex items-center justify-center gap-2">
                 <Sparkles size={16} className="text-cyan-400 animate-pulse" />
                 Evaluating with Gemini AI & ATS Engine...
               </p>
-              <p className="text-slate-400 text-xs mt-1">Analyzing keywords, section weighting, readability, and ATS parsing standards</p>
+              <p className="text-[var(--ui-muted)] text-xs mt-1">Analyzing keywords, section weighting, readability, and ATS parsing standards</p>
             </div>
           )}
 
@@ -357,7 +357,7 @@ export default function AtsChecker() {
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
                       </span>
-                      <h3 className="font-heading font-bold text-base text-white flex items-center gap-2">
+                      <h3 className="font-heading font-bold text-base text-[var(--ui-text)] flex items-center gap-2">
                         <Sparkles size={16} className="text-cyan-400" />
                         AI Recruiter Executive Assessment
                       </h3>
@@ -366,7 +366,7 @@ export default function AtsChecker() {
                       ✨ Powered by Google Gemini AI
                     </span>
                   </div>
-                  <p className="text-sm text-slate-200 leading-relaxed font-sans">
+                  <p className="text-sm text-[var(--ui-text)] leading-relaxed font-sans">
                     {result.ai_feedback}
                   </p>
                 </div>
@@ -376,18 +376,18 @@ export default function AtsChecker() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Score Gauge Card */}
                 <div className="p-8 rounded-2xl flex flex-col items-center justify-center text-center"
-                     style={{ background: '#111338', border: '1px solid rgba(124,58,237,.25)' }}>
-                  <h3 className="font-heading font-bold text-lg mb-4 text-white">ATS Overall Score</h3>
+                     style={{ background: 'var(--bg-card)', border: '1px solid rgba(124,58,237,.25)' }}>
+                  <h3 className="font-heading font-bold text-lg mb-4 text-[var(--ui-text)]">ATS Overall Score</h3>
                   <ScoreGauge score={result.score} />
 
                   <div className="mt-6 w-full grid grid-cols-2 gap-3 text-center">
                     <div className="p-3 rounded-xl" style={{ background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.2)' }}>
                       <div className="font-heading font-bold text-xl text-emerald-400">{matchedKeywords.length}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">Matched Keywords</div>
+                      <div className="text-xs text-[var(--ui-muted)] mt-0.5">Matched Keywords</div>
                     </div>
                     <div className="p-3 rounded-xl" style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)' }}>
                       <div className="font-heading font-bold text-xl text-red-400">{missingKeywords.length}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">Missing Keywords</div>
+                      <div className="text-xs text-[var(--ui-muted)] mt-0.5">Missing Keywords</div>
                     </div>
                   </div>
 
@@ -411,14 +411,14 @@ export default function AtsChecker() {
 
                 {/* 7-Category Breakdown Card */}
                 <div className="lg:col-span-2 p-6 rounded-2xl flex flex-col justify-between"
-                     style={{ background: '#111338', border: '1px solid rgba(124,58,237,.25)' }}>
+                     style={{ background: 'var(--bg-card)', border: '1px solid rgba(124,58,237,.25)' }}>
                   <div>
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
                         <BarChart2 size={16} className="text-purple-400" />
-                        <h3 className="font-heading font-bold text-base text-white">7-Category ATS Breakdown</h3>
+                        <h3 className="font-heading font-bold text-base text-[var(--ui-text)]">7-Category ATS Breakdown</h3>
                       </div>
-                      <span className="text-xs text-slate-400">Target: 100 Points</span>
+                      <span className="text-xs text-[var(--ui-muted)]">Target: 100 Points</span>
                     </div>
 
                     <div className="space-y-3.5">
@@ -434,8 +434,8 @@ export default function AtsChecker() {
                           return (
                             <div key={catKey} className="space-y-1">
                               <div className="flex items-center justify-between text-xs">
-                                <span className="text-slate-300 font-medium">{meta.label}</span>
-                                <span className="font-mono text-slate-400">
+                                <span className="text-[var(--ui-secondary)] font-medium">{meta.label}</span>
+                                <span className="font-mono text-[var(--ui-muted)]">
                                   <strong style={{ color }}>{score}</strong> / {max} pts ({pct}%)
                                 </span>
                               </div>
@@ -449,12 +449,12 @@ export default function AtsChecker() {
                           )
                         })
                       ) : (
-                        <p className="text-xs text-slate-400">Detailed category breakdown available after full scan.</p>
+                        <p className="text-xs text-[var(--ui-muted)]">Detailed category breakdown available after full scan.</p>
                       )}
                     </div>
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-purple-500/20 flex items-center justify-between text-xs text-slate-400">
+                  <div className="mt-6 pt-4 border-t border-purple-500/20 flex items-center justify-between text-xs text-[var(--ui-muted)]">
                     <span className="flex items-center gap-1.5">
                       <ShieldCheck size={14} className="text-emerald-400" /> Standard ATS Compliant
                     </span>
@@ -468,10 +468,10 @@ export default function AtsChecker() {
               {/* Row 2: Strengths & Issues */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Strengths */}
-                <div className="p-6 rounded-2xl" style={{ background: '#111338', border: '1px solid rgba(16,185,129,.25)' }}>
+                <div className="p-6 rounded-2xl" style={{ background: 'var(--bg-card)', border: '1px solid rgba(16,185,129,.25)' }}>
                   <div className="flex items-center gap-2 mb-4">
                     <CheckCircle size={16} className="text-emerald-400" />
-                    <h3 className="font-heading font-bold text-base text-white">Identified Strengths</h3>
+                    <h3 className="font-heading font-bold text-base text-[var(--ui-text)]">Identified Strengths</h3>
                     <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
                       {result.strengths?.length || 0} items
                     </span>
@@ -479,22 +479,22 @@ export default function AtsChecker() {
                   {result.strengths && result.strengths.length > 0 ? (
                     <ul className="space-y-2.5">
                       {result.strengths.map((str, idx) => (
-                        <li key={idx} className="flex items-start gap-2.5 text-xs text-slate-300">
+                        <li key={idx} className="flex items-start gap-2.5 text-xs text-[var(--ui-secondary)]">
                           <Check size={13} className="text-emerald-400 flex-shrink-0 mt-0.5" />
                           <span>{str}</span>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-xs text-slate-400">No major strengths highlighted yet.</p>
+                    <p className="text-xs text-[var(--ui-muted)]">No major strengths highlighted yet.</p>
                   )}
                 </div>
 
                 {/* Issues */}
-                <div className="p-6 rounded-2xl" style={{ background: '#111338', border: '1px solid rgba(239,68,68,.25)' }}>
+                <div className="p-6 rounded-2xl" style={{ background: 'var(--bg-card)', border: '1px solid rgba(239,68,68,.25)' }}>
                   <div className="flex items-center gap-2 mb-4">
                     <AlertCircle size={16} className="text-amber-400" />
-                    <h3 className="font-heading font-bold text-base text-white">Areas to Improve</h3>
+                    <h3 className="font-heading font-bold text-base text-[var(--ui-text)]">Areas to Improve</h3>
                     <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400">
                       {result.issues?.length || 0} issues
                     </span>
@@ -502,7 +502,7 @@ export default function AtsChecker() {
                   {result.issues && result.issues.length > 0 ? (
                     <ul className="space-y-2.5">
                       {result.issues.map((issue, idx) => (
-                        <li key={idx} className="flex items-start gap-2.5 text-xs text-slate-300">
+                        <li key={idx} className="flex items-start gap-2.5 text-xs text-[var(--ui-secondary)]">
                           <AlertCircle size={13} className="text-amber-400 flex-shrink-0 mt-0.5" />
                           <span>{issue}</span>
                         </li>
@@ -520,7 +520,7 @@ export default function AtsChecker() {
               {result.recommendations && result.recommendations.length > 0 && (
                 <div className="p-6 rounded-2xl" style={{ background: 'rgba(124,58,237,.1)', border: '1px solid rgba(124,58,237,.3)' }}>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-heading font-bold text-base text-white flex items-center gap-2">
+                    <h3 className="font-heading font-bold text-base text-[var(--ui-text)] flex items-center gap-2">
                       <Zap size={16} className="text-purple-400" /> Actionable Recommendations
                     </h3>
                     <Link
@@ -533,7 +533,7 @@ export default function AtsChecker() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {result.recommendations.map((rec, idx) => (
-                      <div key={idx} className="flex items-start gap-2.5 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-slate-200">
+                      <div key={idx} className="flex items-start gap-2.5 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-[var(--ui-text)]">
                         <ArrowRight size={13} className="text-purple-400 flex-shrink-0 mt-0.5" />
                         <span>{rec}</span>
                       </div>
@@ -545,10 +545,10 @@ export default function AtsChecker() {
               {/* Row 4: Matched & Missing Keywords */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Matched Keywords */}
-                <div className="p-6 rounded-2xl" style={{ background: '#111338', border: '1px solid rgba(124,58,237,.25)' }}>
+                <div className="p-6 rounded-2xl" style={{ background: 'var(--bg-card)', border: '1px solid rgba(124,58,237,.25)' }}>
                   <div className="flex items-center gap-2 mb-4">
                     <CheckCircle size={16} className="text-emerald-400" />
-                    <h3 className="font-heading font-bold text-base text-white">Keywords Found</h3>
+                    <h3 className="font-heading font-bold text-base text-[var(--ui-text)]">Keywords Found</h3>
                     <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
                       {matchedKeywords.length} matched
                     </span>
@@ -561,16 +561,16 @@ export default function AtsChecker() {
                         </span>
                       ))
                     ) : (
-                      <p className="text-xs text-slate-400">No keyword matches found yet.</p>
+                      <p className="text-xs text-[var(--ui-muted)]">No keyword matches found yet.</p>
                     )}
                   </div>
                 </div>
 
                 {/* Missing Keywords */}
-                <div className="p-6 rounded-2xl" style={{ background: '#111338', border: '1px solid rgba(124,58,237,.25)' }}>
+                <div className="p-6 rounded-2xl" style={{ background: 'var(--bg-card)', border: '1px solid rgba(124,58,237,.25)' }}>
                   <div className="flex items-center gap-2 mb-4">
                     <XCircle size={16} className="text-red-400" />
-                    <h3 className="font-heading font-bold text-base text-white">Missing Keywords</h3>
+                    <h3 className="font-heading font-bold text-base text-[var(--ui-text)]">Missing Keywords</h3>
                     <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-400">
                       {missingKeywords.length} missing
                     </span>
@@ -583,7 +583,7 @@ export default function AtsChecker() {
                         </span>
                       ))
                     ) : (
-                      <p className="text-xs text-slate-400">Add a Job Description to discover missing target keywords.</p>
+                      <p className="text-xs text-[var(--ui-muted)]">Add a Job Description to discover missing target keywords.</p>
                     )}
                   </div>
                 </div>

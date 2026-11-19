@@ -309,6 +309,7 @@ export default function Dashboard() {
             return (
               <button
                 key={item.label}
+                aria-pressed={isActive}
                 onClick={() => {
                   if (item.id === 'settings') setSearchParams({ tab: 'settings' })
                   else if (item.id === 'resumes') setSearchParams({ tab: 'resumes' })
@@ -316,7 +317,7 @@ export default function Dashboard() {
                 }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 text-left cursor-pointer ${
                   isActive
-                    ? 'text-purple-400 bg-purple-500/20 border border-purple-500/30 font-semibold shadow-sm'
+                    ? 'text-[var(--ui-accent)] bg-purple-500/15 border border-purple-500/30 font-semibold'
                     : isLight
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
@@ -392,6 +393,7 @@ export default function Dashboard() {
               return (
                 <button
                   key={item.label}
+                  aria-pressed={isActive}
                   onClick={() => {
                     if (item.id === 'settings') setSearchParams({ tab: 'settings' })
                     else if (item.id === 'resumes') setSearchParams({ tab: 'resumes' })
@@ -399,7 +401,7 @@ export default function Dashboard() {
                   }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 cursor-pointer ${
                     isActive
-                      ? 'text-purple-400 bg-purple-500/20 border border-purple-500/30 font-semibold shadow-sm'
+                      ? 'text-[var(--ui-accent)] bg-purple-500/15 border border-purple-500/30 font-semibold'
                       : isLight
                         ? 'text-slate-600 hover:text-slate-900 bg-slate-100'
                         : 'text-slate-400 hover:text-slate-200 bg-white/5'
@@ -527,12 +529,12 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Full Name */}
                     <div className="flex flex-col gap-1.5">
-                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+                      <label htmlFor="profile-name" className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Full Name <span className="text-purple-400">*</span>
                       </label>
                       <div className="relative">
                         <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input
+                        <input id="profile-name"
                           type="text"
                           required
                           value={settingsForm.name}
@@ -545,12 +547,12 @@ export default function Dashboard() {
 
                     {/* Professional Title */}
                     <div className="flex flex-col gap-1.5">
-                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+                      <label htmlFor="profile-title" className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Target Job Title / Role
                       </label>
                       <div className="relative">
                         <Briefcase size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input
+                        <input id="profile-title"
                           type="text"
                           value={settingsForm.title}
                           onChange={(e) => handleSettingsChange('title', e.target.value)}
@@ -562,12 +564,12 @@ export default function Dashboard() {
 
                     {/* Email */}
                     <div className="flex flex-col gap-1.5">
-                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+                      <label htmlFor="profile-email" className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Email Address (for Resumes)
                       </label>
                       <div className="relative">
                         <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input
+                        <input id="profile-email"
                           type="email"
                           value={settingsForm.email}
                           onChange={(e) => handleSettingsChange('email', e.target.value)}
@@ -579,12 +581,12 @@ export default function Dashboard() {
 
                     {/* Phone */}
                     <div className="flex flex-col gap-1.5">
-                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+                      <label htmlFor="profile-phone" className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Phone Number
                       </label>
                       <div className="relative">
                         <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input
+                        <input id="profile-phone"
                           type="tel"
                           value={settingsForm.phone}
                           onChange={(e) => handleSettingsChange('phone', e.target.value)}
@@ -596,12 +598,12 @@ export default function Dashboard() {
 
                     {/* Location */}
                     <div className="flex flex-col gap-1.5">
-                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+                      <label htmlFor="profile-location" className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Location / City
                       </label>
                       <div className="relative">
                         <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input
+                        <input id="profile-location"
                           type="text"
                           value={settingsForm.location}
                           onChange={(e) => handleSettingsChange('location', e.target.value)}
@@ -613,12 +615,12 @@ export default function Dashboard() {
 
                     {/* LinkedIn */}
                     <div className="flex flex-col gap-1.5">
-                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+                      <label htmlFor="profile-linkedin" className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         LinkedIn Profile URL
                       </label>
                       <div className="relative">
                         <Globe size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input
+                        <input id="profile-linkedin"
                           type="text"
                           value={settingsForm.linkedin}
                           onChange={(e) => handleSettingsChange('linkedin', e.target.value)}
@@ -630,12 +632,12 @@ export default function Dashboard() {
 
                     {/* Portfolio / Website */}
                     <div className="flex flex-col gap-1.5 md:col-span-2">
-                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+                      <label htmlFor="profile-website" className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Portfolio / GitHub / Website
                       </label>
                       <div className="relative">
                         <Globe size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input
+                        <input id="profile-website"
                           type="text"
                           value={settingsForm.website}
                           onChange={(e) => handleSettingsChange('website', e.target.value)}
@@ -662,10 +664,10 @@ export default function Dashboard() {
                   <div className="space-y-4">
                     {/* Summary */}
                     <div className="flex flex-col gap-1.5">
-                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+                      <label htmlFor="profile-summary" className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Default Professional Summary
                       </label>
-                      <textarea
+                      <textarea id="profile-summary"
                         rows={4}
                         value={settingsForm.summary}
                         onChange={(e) => handleSettingsChange('summary', e.target.value)}
@@ -679,10 +681,10 @@ export default function Dashboard() {
 
                     {/* Skills */}
                     <div className="flex flex-col gap-1.5">
-                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+                      <label htmlFor="profile-skills" className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         Default Core Skills (Comma-separated)
                       </label>
-                      <input
+                      <input id="profile-skills"
                         type="text"
                         value={settingsForm.skills}
                         onChange={(e) => handleSettingsChange('skills', e.target.value)}
@@ -779,8 +781,8 @@ export default function Dashboard() {
                     )}
 
                     <div className="flex flex-col gap-1.5">
-                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>New Password</label>
-                      <input
+                      <label htmlFor="profile-newPassword" className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>New Password</label>
+                      <input id="profile-newPassword"
                         type="password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
@@ -790,8 +792,8 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                      <label className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Confirm New Password</label>
-                      <input
+                      <label htmlFor="profile-confirmPassword" className={`text-xs font-semibold ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Confirm New Password</label>
+                      <input id="profile-confirmPassword"
                         type="password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}

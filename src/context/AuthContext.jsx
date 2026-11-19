@@ -107,12 +107,12 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (returnTo = '/dashboard') => {
     const origin = window.location.origin || 'https://dailyresumeai.online'
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${origin}/dashboard`,
+        redirectTo: new URL(returnTo, origin).origin === origin ? new URL(returnTo, origin).href : `${origin}/dashboard`,
       },
     })
     if (error) throw error

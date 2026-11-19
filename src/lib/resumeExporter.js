@@ -3,12 +3,13 @@
  * Supports JSON Backup, JSON Import, and Plain Text (TXT) ATS Copy.
  */
 
-export function exportResumeToJson(data, title = 'resume') {
+export function exportResumeToJson(data, title = 'resume', appearance = {}) {
   const exportPayload = {
     version: '1.0',
     generator: 'ResumeAI Pro',
     exportedAt: new Date().toISOString(),
     resumeTitle: title,
+    appearance,
     data
   }
 
@@ -30,10 +31,20 @@ export function parseResumeFromJsonFile(file) {
       try {
         const parsed = JSON.parse(e.target.result)
         const resumeData = parsed.data || parsed
-        if (!resumeData.personal) {
+        if (!resumeData.personal || typeof resumeData.personal !== 'object' || Array.isArray(resumeData.personal)) {
           throw new Error('Invalid JSON resume schema: missing personal info.')
         }
-        resolve(resumeData)
+        for (const section of ['experience', 'education', 'skills', 'projects', 'certifications']) {
+          if (section in resumeData && !Array.isArray(resumeData[section])) {
+            throw new Error(`Invalid ${section} section.`)
+          }
+        }
+        resolve({
+          data: resumeData,
+          title: typeof parsed.resumeTitle === 'string' ? parsed.resumeTitle : resumeData.personal.title,
+          font: parsed.appearance?.font,
+          template: parsed.appearance?.template,
+        })
       } catch (err) {
         reject(new Error('Failed to parse JSON file: ' + err.message))
       }

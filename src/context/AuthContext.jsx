@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { authApi } from '../lib/api'
 import { isPaidPlan, resolvePlanKey } from '../config/plans'
@@ -10,47 +10,14 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  /* ── Load session on mount ────────────────────────────────── */
-  useEffect(() => {
-    // Purge any legacy demo user session
-    localStorage.removeItem('demo_user')
-
-    // Get initial Supabase session
-    supabase.auth.getSession().then(({ data }) => {
-      const session = data?.session
-      setUser(session?.user ?? null)
-      if (session?.user) fetchProfile()
-      else setLoading(false)
-    }).catch(err => {
-      console.warn('Supabase not configured or unreachable:', err?.message)
-      setLoading(false)
-    })
-
-    // Listen for auth changes
-    try {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          if (session?.user) {
-            setUser(session.user)
-            await fetchProfile()
-          } else {
-            setUser(null)
-            setProfile(null)
-            setLoading(false)
-          }
-        }
-      )
-      return () => subscription?.unsubscribe?.()
-    } catch (err) {
-      console.warn('Supabase auth state listener skipped:', err?.message)
-    }
-  }, [])
+  const profileVersion = useRef(0)
 
   /* ── Fetch user profile from our API (with Supabase fallback) ── */
   const fetchProfile = useCallback(async () => {
+    const version = ++profileVersion.current
     try {
       const { data } = await authApi.me()
-      if (data) {
+      if (data && version === profileVersion.current) {
         setProfile(data)
         return
       }
@@ -64,16 +31,44 @@ export function AuthProvider({ children }) {
             .select('*')
             .eq('id', currentUserId)
             .single()
-          if (dbProfile) {
+          if (dbProfile && version === profileVersion.current) {
             setProfile(dbProfile)
             return
           }
         }
       } catch (_) {}
     } finally {
-      setLoading(false)
+      if (version === profileVersion.current) setLoading(false)
     }
   }, [])
+
+  /* ── Load session on mount ────────────────────────────────── */
+  useEffect(() => {
+    // Purge any legacy demo user session
+    localStorage.removeItem('demo_user')
+
+    // INITIAL_SESSION also fires on reload. Keep API calls outside the auth
+    // callback because the Axios interceptor needs to read the session itself.
+    let profileTimer
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        profileVersion.current++
+        clearTimeout(profileTimer)
+        setUser(session?.user ?? null)
+        if (session?.user) {
+          profileTimer = setTimeout(fetchProfile, 0)
+        } else {
+          setProfile(null)
+          setLoading(false)
+        }
+      }
+    )
+    return () => {
+      clearTimeout(profileTimer)
+      profileVersion.current++
+      subscription.unsubscribe()
+    }
+  }, [fetchProfile])
 
   /* ── Auth Actions ─────────────────────────────────────────── */
   const signUp = async ({ email, password, full_name }) => {
@@ -189,14 +184,7 @@ export function AuthProvider({ children }) {
       }
     } catch (_) {}
 
-    // 4. Save to localStorage per user ID and global photo key
-    if (updates.photo !== undefined) {
-      if (updates.photo) {
-        localStorage.setItem('resumeai_user_photo', updates.photo)
-      } else {
-        localStorage.removeItem('resumeai_user_photo')
-      }
-    }
+    // Keep profile defaults scoped to this account on shared devices.
     if (user?.id) {
       const storageKey = `user_default_resume_${user.id}`
       const existing = JSON.parse(localStorage.getItem(storageKey) || '{}')
@@ -215,7 +203,7 @@ export function AuthProvider({ children }) {
     if (!user?.id) return {}
     const local = JSON.parse(localStorage.getItem(`user_default_resume_${user.id}`) || '{}')
     const fullName = local.name || local.full_name || profile?.full_name || user.user_metadata?.full_name || ''
-    const savedPhoto = local.photo || profile?.photo || profile?.avatar_url || user.user_metadata?.photo || user.user_metadata?.avatar_url || localStorage.getItem('resumeai_user_photo') || ''
+    const savedPhoto = local.photo || profile?.photo || profile?.avatar_url || user.user_metadata?.photo || user.user_metadata?.avatar_url || ''
     return {
       name: fullName || (user.email ? user.email.split('@')[0] : ''),
       email: local.email || user.email || '',

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   Download, Eye, ChevronDown, ChevronUp, Plus, Trash2,
   Zap, Palette, Type, LayoutTemplate, Brain, Target,
@@ -16,6 +16,7 @@ import {
   streamEnhanceBulletsWithAI,
   streamEnhanceSectionWithAI,
 } from '../lib/aiService'
+import resumeFonts from '../../server/config/resumeFonts.json'
 import { pdfApi } from '../lib/api'
 import { isPaidPlan } from '../config/plans'
 import { resumeStorage } from '../lib/resumeStorage'
@@ -58,7 +59,7 @@ export const TEMPLATES = [
 ]
 
 const ACCENT_COLORS = ['#000000', '#1E293B', '#0F2B48', '#334155', '#1B4332']
-const FONTS = ['Times New Roman', 'Arial', 'Inter', 'Georgia', 'Roboto']
+const FONTS = Object.keys(resumeFonts)
 
 const DEFAULT_SECTION_ORDER = [
   'summary',
@@ -78,10 +79,10 @@ const SECTION_LABELS = {
   certifications: 'Certifications & Achievements'
 }
 
-function getSkillGroups(skills = [], categoryMap = {}) {
+function getSkillGroups(skills = [], categoryMap = {}, fallback = 'Skills') {
   const grouped = new Map()
   skills.filter(Boolean).forEach(skill => {
-    const category = (categoryMap?.[skill] || '').trim() || 'Skills'
+    const category = (categoryMap?.[skill] || '').trim() || fallback
     if (!grouped.has(category)) grouped.set(category, [])
     grouped.get(category).push(skill)
   })
@@ -216,7 +217,7 @@ function ResumeDoc({
 }) {
   const densityMultiplier = spacingDensity === 'compact' ? 0.88 : spacingDensity === 'relaxed' ? 1.12 : 1.0
   const s = {
-    fontFamily: font,
+    fontFamily: resumeFonts[font].family,
     fontSize: `${Math.round(11.5 * fontSizeScale)}px`,
     lineHeight: (1.38 * densityMultiplier).toFixed(2)
   }
@@ -259,40 +260,26 @@ function ResumeDoc({
 
   /* ── OVERLEAF: Jake's Resume / classic Overleaf layout ─────── */
   if (template === "Overleaf") {
-    // Categories are explicitly assigned by the user in the Skills editor.
-    // Legacy resumes without category metadata remain visible as Uncategorized.
-    const skills = Array.isArray(data.skills) ? data.skills.filter(Boolean) : []
-    const categoryMap = data.skillCategories && typeof data.skillCategories === 'object' ? data.skillCategories : {}
-    const grouped = new Map()
-    skills.forEach(skill => {
-      const category = (categoryMap[skill] || 'Uncategorized').trim() || 'Uncategorized'
-      if (!grouped.has(category)) grouped.set(category, [])
-      grouped.get(category).push(skill)
-    })
-    const skillGroups = Array.from(grouped, ([label, values]) => ({ label, values }))
-    const sectionHeading = { fontSize: '15px', fontWeight: 700, lineHeight: 1.2, borderBottom: '1px solid #111827', paddingBottom: '2px', marginBottom: '5px', color: '#111827' }
-    const smallText = { fontSize: '10.5px', lineHeight: 1.3, color: '#111827' }
+    const skillGroups = getSkillGroups(data.skills, data.skillCategories, 'Uncategorized')
+    const sectionHeading = { fontSize: `${15 * fontSizeScale}px`, fontWeight: 700, lineHeight: 1.2, borderBottom: `1px solid ${accent}`, paddingBottom: '2px', marginBottom: '5px', color: '#111827' }
+    const smallText = { fontSize: `${10.5 * fontSizeScale}px`, lineHeight: 1.3 * densityMultiplier, color: '#111827' }
     return (
       <div id="printable-resume" className="bg-white text-gray-900" style={{
         ...A4_RESUME_STYLE, padding: '14mm 17mm', boxShadow: 'none',
-        fontFamily: 'Times New Roman, serif', fontSize: '10.5px', lineHeight: 1.25
+        fontFamily: s.fontFamily, ...smallText
       }}>
         <header style={{ textAlign: 'center', marginBottom: '11px' }}>
-          <h1 style={{ fontSize: '22px', lineHeight: 1.15, fontWeight: 700, margin: 0, color: '#111827' }}>
+          <h1 style={{ fontSize: `${22 * fontSizeScale}px`, lineHeight: 1.15, fontWeight: 700, margin: 0, color: '#111827' }}>
             {data.personal.name || 'Your Name'}
           </h1>
-          <div style={{ fontSize: '10.5px', lineHeight: 1.4, marginTop: '3px' }}>
-            {[data.personal.phone, data.personal.email, data.personal.linkedin, data.personal.website]
-              .filter(Boolean).map((value, i, arr) => (
-                <span key={value}>
-                  {i > 0 && <span> | </span>}
-                  {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? (
-                    <a href={`mailto:${value}`} style={{ color: 'inherit', textDecoration: 'none' }}>{value}</a>
-                  ) : /linkedin|github|https?:\/\//i.test(value) ? (
-                    <a href={formatUrl(value)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>{cleanUrlDisplay(value)}</a>
-                  ) : <span>{value}</span>}
-                </span>
-              ))}
+          {data.personal.title && <div style={smallText}>{data.personal.title}</div>}
+          <div style={{ ...smallText, marginTop: '3px' }}>
+            {contactItems.map((item, index) => (
+              <span key={item.type}>
+                {index > 0 && ' | '}
+                {item.isLink ? <a href={item.href} target={item.target} rel="noopener noreferrer">{item.label}</a> : item.label}
+              </span>
+            ))}
           </div>
         </header>
 
@@ -333,7 +320,7 @@ function ResumeDoc({
           </div>)}
         </section>}
 
-        {skills.length > 0 && <section style={{ marginBottom: '10px' }}>
+        {skillGroups.length > 0 && <section style={{ marginBottom: '10px' }}>
           <h2 style={sectionHeading}>Technical Skills</h2>
           <div style={smallText}>
             {skillGroups.filter(group => group.values.length > 0).map(group => <div key={group.label} style={{ marginBottom: '2px' }}>
@@ -544,7 +531,7 @@ function ResumeDoc({
   }
 
   /* ── 2. TWO-COLUMN TECH WITH PHOTO ─────────────────────────── */
-  if (template === "Two-Column Tech with Photo") {
+  if (template === "Two-Column Tech with Photo" || template === "Deedy Two-Column (LaTeX)") {
     return (
       <div id="printable-resume" className="bg-white text-gray-900 shadow-2xl" style={{ ...A4_RESUME_STYLE, ...s }}>
         {/* Top Header */}
@@ -557,7 +544,7 @@ function ResumeDoc({
               {data.personal.title}
             </div>
           </div>
-          {hasPhoto && (
+          {hasPhoto && template === "Two-Column Tech with Photo" && (
             <img src={data.personal.photo} alt={data.personal.name}
                  className="w-16 h-16 rounded-xl object-cover border shadow-sm" style={{ borderColor: accent }} />
           )}
@@ -934,9 +921,9 @@ function ResumeDoc({
 
   /* ── 4. (STANDARD ATS DEFAULT & REORDERABLE SINGLE-COLUMN) ──── */
   return (
-    <div id="printable-resume" className="bg-white text-gray-900 shadow-2xl" style={{ ...A4_RESUME_STYLE, ...s }}>
+    <div id="printable-resume" data-template={template} className="bg-white text-gray-900 shadow-2xl" style={{ ...A4_RESUME_STYLE, ...s }}>
       {/* Centered Name & Contact */}
-      <div className="text-center pb-2.5 mb-3">
+      <div className="resume-header text-center pb-2.5 mb-3">
         {hasPhoto && (
           <div className="flex justify-center mb-2">
             <img src={data.personal.photo} alt={data.personal.name}
@@ -947,8 +934,9 @@ function ResumeDoc({
             style={{ fontSize: `${Math.round(26 * fontSizeScale)}px`, letterSpacing: '0.8px' }}>
           {data.personal.name || 'YOUR NAME'}
         </h1>
+        {data.personal.title && <div>{data.personal.title}</div>}
         {/* Clickable Centered Contacts */}
-        <div className="text-gray-800 flex justify-center flex-wrap items-center gap-x-2.5 leading-normal"
+        <div className="resume-contacts text-gray-800 flex justify-center flex-wrap items-center gap-x-2.5 leading-normal"
              style={{ fontSize: `${Math.round(11 * fontSizeScale)}px` }}>
           {contactItems.map((c, i) => (
             <span key={i} className="inline-flex items-center">
@@ -1133,7 +1121,8 @@ function ResumeDoc({
 export default function Builder() {
   const [searchParams, setSearchParams] = useSearchParams()
   const templateFromUrl = searchParams.get('template')
-  const resumeIdFromUrl = searchParams.get('id')
+  const { id: pathId } = useParams()
+  const resumeIdFromUrl = searchParams.get('id') || pathId
 
   const { theme, toggleTheme, isDark } = useTheme()
   const isLight = theme === 'light'
@@ -1229,7 +1218,7 @@ export default function Builder() {
   // Auto-populate logged in user defaults & saved photo into resume builder
   useEffect(() => {
     const defaults = getUserDefaults ? getUserDefaults() : {}
-    const savedPhoto = defaults.photo || localStorage.getItem('resumeai_user_photo') || ''
+    const savedPhoto = defaults.photo || ''
 
     if (savedPhoto) {
       setData(prev => {
@@ -1355,7 +1344,7 @@ export default function Builder() {
         setCurrentResumeId(saved.id)
         // Keep the active resume ID in the URL so a page refresh reloads this draft
         // instead of initializing a new, blank resume.
-        if (searchParams.get('id') !== saved.id) {
+        if (resumeIdFromUrl !== saved.id) {
           setSearchParams(prev => {
             const next = new URLSearchParams(prev)
             next.set('id', saved.id)
@@ -1377,7 +1366,7 @@ export default function Builder() {
         if (saveVersionRef.current === version) setSaveStatus('idle')
       }, 5000)
     }
-  }, [currentResumeId, resumeTitle, template, accent, font, user, searchParams, setSearchParams])
+  }, [currentResumeId, resumeTitle, template, accent, font, user, resumeIdFromUrl, setSearchParams])
 
   // Debounced autosave: triggers 2s after last edit (data + meta changes)
   useEffect(() => {
@@ -1450,9 +1439,11 @@ export default function Builder() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
-      const importedData = await parseResumeFromJsonFile(file)
-      setData(importedData)
-      if (importedData.personal?.title) setResumeTitle(importedData.personal.title)
+      const backup = await parseResumeFromJsonFile(file)
+      setData({ ...defaultData, ...backup.data, personal: { ...defaultData.personal, ...backup.data.personal } })
+      if (backup.title) setResumeTitle(backup.title)
+      if (FONTS.includes(backup.font)) setFont(backup.font)
+      if (TEMPLATES.includes(backup.template)) setTemplate(backup.template)
       setIsExportMenuOpen(false)
     } catch (err) {
       alert(err.message || 'Could not import JSON file')
@@ -1504,11 +1495,6 @@ export default function Builder() {
   // Save photo in user account & localStorage
   const savePhotoToAccount = async (photoUrl) => {
     try {
-      if (photoUrl) {
-        localStorage.setItem('resumeai_user_photo', photoUrl)
-      } else {
-        localStorage.removeItem('resumeai_user_photo')
-      }
       if (updateProfile) {
         await updateProfile({
           photo: photoUrl,
@@ -1811,21 +1797,12 @@ export default function Builder() {
       // Extract all compiled CSS from current page
       const extractedCSS = extractPageCSS()
 
-      // Build Google Fonts URL
-      const fontFamilies = [font, 'Inter', 'Roboto', 'Times New Roman'].filter(Boolean)
-      const googleFonts = fontFamilies
-        .filter(f => !['Times New Roman', 'Georgia', 'Arial', 'Helvetica', 'serif', 'sans-serif'].includes(f))
-        .map(f => `family=${encodeURIComponent(f)}:wght@400;500;600;700`)
-        .join('&')
-
       const fullHtml = `<!DOCTYPE html>
 <html>
 <head>
-  <title>${(data.personal.name || 'Resume') + ' - ATS Resume'}</title>
+  <title>Resume</title>
   <meta charset="utf-8" />
-  ${googleFonts ? `<link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?${googleFonts}&display=swap" rel="stylesheet">` : ''}
+  <link rel="stylesheet" href="${resumeFonts[font].stylesheet}">
   <style>
     ${extractedCSS}
   </style>
@@ -1843,7 +1820,7 @@ export default function Builder() {
       margin: 0 !important;
       padding: 0 !important;
       background: #ffffff !important;
-      font-family: "${font}", "Times New Roman", serif;
+      font-family: ${resumeFonts[font].family};
       width: 210mm !important;
       min-height: 297mm !important;
       overflow: visible !important;
@@ -2024,6 +2001,7 @@ export default function Builder() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ paddingTop: 72, background: isLight ? '#f8fafc' : '#080920' }}>
+      <link rel="stylesheet" href={resumeFonts[font].stylesheet} />
       {/* ── Global Sub-Header Bar (Template Selector, Font Size, View Mode, Zoom, Theme, Download) ── */}
       <header className="px-2.5 sm:px-4 py-2 border-b flex items-center justify-between gap-2 overflow-x-auto scrollbar-none z-20 flex-shrink-0 transition-colors"
               style={{ background: isLight ? '#ffffff' : '#0c0e29', borderColor: isLight ? '#e2e8f0' : 'rgba(124,58,237,.2)' }}>
@@ -2076,7 +2054,7 @@ export default function Builder() {
           </div>
 
           {/* Font Dropdown with Icon */}
-          <div className={`hidden sm:flex items-center gap-1.5 border rounded-lg shadow-sm transition-colors ${
+          <div className={`flex items-center gap-1.5 border rounded-lg shadow-sm transition-colors ${
             isLight ? 'bg-white border-slate-300' : 'bg-[#141842] border-purple-500/30'
           }`}>
             <Type size={13} className={`ml-2.5 flex-shrink-0 ${
@@ -2333,7 +2311,7 @@ export default function Builder() {
                 <button
                   type="button"
                   onClick={() => {
-                    exportResumeToJson(data, resumeTitle)
+                    exportResumeToJson(data, resumeTitle, { font, template })
                     setIsExportMenuOpen(false)
                   }}
                   className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors ${
@@ -2880,8 +2858,7 @@ export default function Builder() {
         )}
 
         {/* ── Right Canvas: Scaled & Non-Clipping Preview Area ── */}
-        {(viewMode === 'preview' || viewMode === 'split') && (
-          <main className="flex-1 flex flex-col overflow-hidden" ref={previewContainerRef}>
+          <main className={`flex-1 flex-col overflow-hidden ${viewMode === 'edit' ? 'hidden' : 'flex'}`} ref={previewContainerRef}>
             <div className={`flex-1 overflow-auto p-4 md:p-8 transition-colors ${
               isLight ? 'bg-slate-200/70' : 'bg-[#0e1026]'
             }`}>
@@ -2960,7 +2937,6 @@ export default function Builder() {
 
             </div>
           </main>
-        )}
 
       </div>
 

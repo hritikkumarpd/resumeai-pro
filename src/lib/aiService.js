@@ -30,6 +30,17 @@ export async function streamAiRequest(endpoint, payload, { onChunk, onDone, onEr
     if (onError) onError(err)
   }
 
+  const controller = new AbortController()
+  let timer
+  const resetTimer = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => controller.abort(new Error('AI service timed out.')), 60_000)
+  }
+  const cancel = () => controller.abort(signal.reason)
+  if (signal?.aborted) cancel()
+  else signal?.addEventListener('abort', cancel, { once: true })
+  resetTimer()
+
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -39,7 +50,7 @@ export async function streamAiRequest(endpoint, payload, { onChunk, onDone, onEr
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
       body: JSON.stringify(payload),
-      signal,
+      signal: controller.signal,
     })
 
     if (!response.ok) {
@@ -65,6 +76,7 @@ export async function streamAiRequest(endpoint, payload, { onChunk, onDone, onEr
       const { done, value } = await reader.read()
       if (done) break
 
+      resetTimer()
       buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split('\n')
       buffer = lines.pop() || ''
@@ -108,12 +120,17 @@ export async function streamAiRequest(endpoint, payload, { onChunk, onDone, onEr
       } catch (_) {}
     }
 
-    const finalResult = doneResult || { done: true, fullText }
+    if (!doneResult) throw new Error('The AI stream ended before completing its response.')
+    const finalResult = doneResult
     if (onDone) onDone(finalResult, fullText)
     return finalResult
   } catch (err) {
     notifyError(err)
     throw err
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', cancel)
+    controller.abort()
   }
 }
 

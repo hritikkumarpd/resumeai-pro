@@ -480,6 +480,10 @@ CRITICAL RULES:
   })
 })
 
+function coverLetterDate() {
+  return new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' })
+}
+
 /* ── Streaming handler: Cover Letter ───────────────────────── */
 async function handleStreamCoverLetter(req, res) {
   const { name, role, company, skills, experience, tone, customPrompt: directPrompt, context } = req.body
@@ -499,6 +503,7 @@ async function handleStreamCoverLetter(req, res) {
   const toneText = tone || 'Professional'
   const applicantName = name || 'the applicant'
 
+  const today = coverLetterDate()
   const prompt = `You are an expert career coach and professional cover letter writer.
 Write a complete, professional cover letter for ${applicantName} applying for the "${role}" position at ${company}.
 
@@ -517,7 +522,7 @@ CRITICAL RULES:
 - DO NOT use generic placeholder text like "[Your Name]" or "[Address]".
 - Use the applicant's actual name: ${applicantName}.
 - Output ONLY the cover letter text. No markdown formatting, no code blocks, no preamble.
-- Start with today's date, then the greeting.`
+- Start with the exact date ${today} on its own line, then the greeting.`
 
   const { state, onChunk } = makeChunkTracker(res)
   try {
@@ -541,7 +546,6 @@ CRITICAL RULES:
   }
 
   // Smart template fallback when Gemini is unavailable
-  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   const openings = {
     Professional: `I am writing to express my strong interest in the ${role} position at ${company}.`,
     Enthusiastic: `I was thrilled to discover the ${role} opening at ${company} and am excited to apply!`,
@@ -574,6 +578,7 @@ ${role} Applicant`
 
   await streamFallbackWords(res, fallbackLetter, {
     letter: fallbackLetter,
+    source: 'template',
   })
 }
 
@@ -601,6 +606,7 @@ router.post('/cover-letter', optionalAuth, async (req, res) => {
   const toneText = tone || 'Professional'
   const applicantName = name || 'the applicant'
 
+  const today = coverLetterDate()
   const prompt = `You are an expert career coach and professional cover letter writer.
 Write a complete, professional cover letter for ${applicantName} applying for the "${role}" position at ${company}.
 
@@ -619,7 +625,7 @@ CRITICAL RULES:
 - DO NOT use generic placeholder text like "[Your Name]" or "[Address]".
 - Use the applicant's actual name: ${applicantName}.
 - Output ONLY the cover letter text. No markdown formatting, no code blocks, no preamble.
-- Start with today's date, then the greeting.`
+- Start with the exact date ${today} on its own line, then the greeting.`
 
   try {
     const letter = await callGemini(prompt, 1500)
@@ -636,7 +642,6 @@ CRITICAL RULES:
   }
 
   // Smart template fallback when Gemini is unavailable
-  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   const openings = {
     Professional: `I am writing to express my strong interest in the ${role} position at ${company}.`,
     Enthusiastic: `I was thrilled to discover the ${role} opening at ${company} and am excited to apply!`,
@@ -669,6 +674,7 @@ ${role} Applicant`
 
   res.json({
     letter: fallbackLetter,
+    source: 'template',
     _fallback: true,
     _fallback_reason: isGeminiAvailable() ? 'Gemini returned no result' : 'GEMINI_API_KEY not configured — using smart template',
   })

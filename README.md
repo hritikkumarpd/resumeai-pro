@@ -14,7 +14,7 @@
 
 **Transform raw career history into high-converting, ATS-beating resumes, cover letters, and recruiter insights powered by Google Gemini AI.**
 
-[🌐 Live Production Website](https://dailyresumeai.online) • [📖 Documentation](#-table-of-contents) • [🚀 Quickstart](#-quickstart--installation)
+[🌐 Live App (Vercel)](https://resumeaihritik.vercel.app) • [🌐 Custom Domain](https://dailyresumeai.online) • [📖 Documentation](#-table-of-contents) • [🚀 Quickstart](#-quickstart--installation)
 
 </div>
 

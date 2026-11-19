@@ -8,7 +8,7 @@ services:
     region: singapore   # Change to your nearest: oregon, frankfurt, singapore
     plan: free           # free tier — upgrades automatically
     rootDir: server
-    buildCommand: npm install
+    buildCommand: npm ci && npx --no-install puppeteer browsers install chrome && node scripts/check-pdf-renderer.cjs
     startCommand: npm start
     envVars:
       - key: NODE_ENV

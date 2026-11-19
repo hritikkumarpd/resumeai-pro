@@ -90,6 +90,8 @@ export default function Dashboard() {
   const [loadingData, setLoadingData] = useState(true)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
 
+  const [resumeActionError, setResumeActionError] = useState('')
+
   // Fetch real data from storage + API
   const fetchDashboardData = useCallback(async () => {
     setLoadingData(true)
@@ -153,12 +155,14 @@ export default function Dashboard() {
 
   // Delete resume handler
   const handleDeleteResume = async (id) => {
+    setResumeActionError('')
     try {
       await resumeStorage.delete(id, user)
       setResumes(prev => prev.filter(r => r.id !== id))
       setDeleteConfirm(null)
     } catch (err) {
-      console.error('Failed to delete resume:', err)
+      setResumeActionError(err.response?.data?.error || err.message || 'Could not delete the resume.')
+      setDeleteConfirm(null)
     }
   }
 
@@ -179,13 +183,14 @@ export default function Dashboard() {
       setRenamingId(null)
       return
     }
+    setResumeActionError('')
     setIsRenaming(true)
     try {
       await resumeStorage.rename(id, finalTitle, user)
       setResumes(prev => prev.map(r => r.id === id ? { ...r, title: finalTitle } : r))
       setRenamingId(null)
     } catch (err) {
-      console.error('Failed to rename resume:', err)
+      setResumeActionError(err.response?.data?.error || err.message || 'Could not rename the resume.')
     } finally {
       setIsRenaming(false)
     }
@@ -432,6 +437,7 @@ export default function Dashboard() {
 
         {/* Main Content Area */}
         <main className="flex-1 px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto max-w-7xl w-full mx-auto">
+          {resumeActionError && <p role="alert" className="mb-4 rounded-lg border border-red-400 p-3">{resumeActionError}</p>}
         {activeTab === 'settings' ? (
           /* ═════════════════════════════════════════════════════════════ */
           /* SETTINGS VIEW                                               */

@@ -73,10 +73,10 @@ export default function ResetPassword() {
           </div>
 
           <div className="text-center mb-6">
-            <h1 className="font-heading font-extrabold text-2xl text-white mb-2">
+            <h1 className="font-heading font-extrabold text-2xl text-[var(--ui-text)] mb-2">
               Set New Password
             </h1>
-            <p className="text-slate-400 text-sm">
+            <p className="text-[var(--ui-muted)] text-sm">
               Please enter your new password below.
             </p>
           </div>
@@ -85,7 +85,7 @@ export default function ResetPassword() {
             <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-center">
               <CheckCircle2 size={32} className="mx-auto text-emerald-400 mb-2" />
               <p className="font-semibold text-sm">Password Updated!</p>
-              <p className="text-xs text-slate-400 mt-1">Redirecting you to your dashboard...</p>
+              <p className="text-xs text-[var(--ui-muted)] mt-1">Redirecting you to your dashboard...</p>
             </div>
           ) : (
             <form onSubmit={handleReset} className="flex flex-col gap-4">
@@ -97,8 +97,8 @@ export default function ResetPassword() {
               )}
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-slate-400">New Password</label>
-                <input
+                <label htmlFor="resetpassword-field-1" className="text-xs font-medium text-[var(--ui-muted)]">New Password</label>
+                <input id="resetpassword-field-1"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -109,8 +109,8 @@ export default function ResetPassword() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-slate-400">Confirm New Password</label>
-                <input
+                <label htmlFor="resetpassword-field-2" className="text-xs font-medium text-[var(--ui-muted)]">Confirm New Password</label>
+                <input id="resetpassword-field-2"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -139,7 +139,7 @@ export default function ResetPassword() {
               </button>
 
               <div className="text-center pt-2">
-                <Link to="/login" className="text-xs text-slate-400 hover:text-purple-400 transition-colors">
+                <Link to="/login" className="text-xs text-[var(--ui-muted)] hover:text-purple-400 transition-colors">
                   ← Return to Login
                 </Link>
               </div>

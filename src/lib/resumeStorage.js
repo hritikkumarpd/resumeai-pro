@@ -74,16 +74,21 @@ export const resumeStorage = {
   async get(id, user) {
     const userId = user?.id || 'guest'
     const localKey = getStorageKey(userId)
-    const localResumes = JSON.parse(localStorage.getItem(localKey) || '[]')
+    const localResumes = readLocal(localKey)
     const localMatch = localResumes.find(r => r.id === id)
+
+    if (localMatch && id.startsWith('res_')) return localMatch
 
     try {
       const res = await resumeApi.get(id)
       if (res.data) {
+        const latest = readLocal(localKey)
+        const draft = latest.find(record => record.id === id)
+        if (draft?.data && Date.parse(draft.updated_at) > Date.parse(res.data.updated_at)) return draft
         // Cache to local
-        const updatedLocal = localResumes.some(r => r.id === id)
-          ? localResumes.map(r => r.id === id ? { ...r, ...res.data } : r)
-          : [...localResumes, res.data]
+        const updatedLocal = latest.some(r => r.id === id)
+          ? latest.map(r => r.id === id ? { ...r, ...res.data } : r)
+          : [...latest, res.data]
         writeLocal(localKey, updatedLocal)
         return res.data
       }
@@ -103,7 +108,7 @@ export const resumeStorage = {
   async save(payload, user) {
     const userId = user?.id || 'guest'
     const localKey = getStorageKey(userId)
-    const localResumes = JSON.parse(localStorage.getItem(localKey) || '[]')
+    const localResumes = readLocal(localKey)
     const now = new Date().toISOString()
 
     const isExistingCloudResume = payload.id && !payload.id.startsWith('res_')
@@ -201,7 +206,7 @@ export const resumeStorage = {
   async delete(id, user) {
     const userId = user?.id || 'guest'
     const localKey = getStorageKey(userId)
-    const localResumes = JSON.parse(localStorage.getItem(localKey) || '[]')
+    const localResumes = readLocal(localKey)
 
     const updated = localResumes.filter(r => r.id !== id)
     writeLocal(localKey, updated)
@@ -223,7 +228,7 @@ export const resumeStorage = {
   async rename(id, newTitle, user) {
     const userId = user?.id || 'guest'
     const localKey = getStorageKey(userId)
-    const localResumes = JSON.parse(localStorage.getItem(localKey) || '[]')
+    const localResumes = readLocal(localKey)
     const now = new Date().toISOString()
 
     const updated = localResumes.map(r => {
@@ -256,7 +261,7 @@ export const resumeStorage = {
     const now = new Date().toISOString()
 
     try {
-      const localResumes = JSON.parse(localStorage.getItem(localKey) || '[]')
+      const localResumes = readLocal(localKey)
       const resumeId = payload.id || `res_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`
 
       const resumeRecord = {

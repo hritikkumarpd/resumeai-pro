@@ -1,3 +1,4 @@
+import BuilderDialog from './BuilderDialog'
 import React from 'react'
 import { Target, Search, CheckCircle2, AlertCircle, Plus, X, Sparkles } from 'lucide-react'
 
@@ -7,7 +8,7 @@ export default function JobMatcherModal({ jdText, setJdText, analysis, onAddSkil
   const rateColor = matchRate >= 80 ? '#10B981' : matchRate >= 60 ? '#F59E0B' : '#EF4444'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <BuilderDialog label="Job matcher" onClose={onClose}>
       <div
         className="w-full max-w-3xl rounded-2xl p-6 shadow-2xl border flex flex-col max-h-[90vh]"
         style={{
@@ -210,6 +211,6 @@ export default function JobMatcherModal({ jdText, setJdText, analysis, onAddSkil
           </button>
         </div>
       </div>
-    </div>
+    </BuilderDialog>
   )
 }

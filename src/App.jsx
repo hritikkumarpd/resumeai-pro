@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import Navbar   from './components/layout/Navbar'
@@ -17,6 +17,7 @@ import './App.css'
 
 /* ── Protected Route ────────────────────────────────────────── */
 function ProtectedRoute({ children }) {
+  const location = useLocation()
   const { isAuthenticated, loading } = useAuth()
   if (loading) {
     return (
@@ -29,14 +30,15 @@ function ProtectedRoute({ children }) {
       </div>
     )
   }
-  return isAuthenticated ? children : <Navigate to="/login" replace />
+  return isAuthenticated ? children : <Navigate to="/login" state={{ returnTo: location.pathname + location.search + location.hash }} replace />
 }
 
 /* ── Public Route (redirect if logged in) ───────────────────── */
 function PublicOnlyRoute({ children }) {
+  const { state } = useLocation()
   const { isAuthenticated, loading } = useAuth()
   if (loading) return null
-  return !isAuthenticated ? children : <Navigate to="/dashboard" replace />
+  return !isAuthenticated ? children : <Navigate to={state?.returnTo || "/dashboard"} replace />
 }
 
 /* ── Layout wrappers ────────────────────────────────────────── */

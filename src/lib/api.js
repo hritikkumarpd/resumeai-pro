@@ -34,7 +34,8 @@ api.interceptors.response.use(
                      error.config?.url?.includes('/ai/') ||
                      error.config?.url?.includes('/ats/')
 
-    if (error.response?.status === 401 && !isExempt) {
+    if (error.response?.status === 401 && !isExempt && !error.config._retried) {
+      error.config._retried = true
       // Try to refresh session
       try {
         const { data } = await supabase.auth.refreshSession()

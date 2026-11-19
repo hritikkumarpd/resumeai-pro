@@ -181,13 +181,13 @@ export default function Admin() {
 
             <form onSubmit={(e) => { e.preventDefault(); verifyAndLoad(secretInput) }} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <label htmlFor="admin-key" className="block text-xs font-semibold text-[var(--ui-secondary)] mb-1.5">
                   Admin Master Key
                 </label>
                 <div className="relative">
                   <input
                     type="password"
-                    value={secretInput}
+                    id="admin-key" value={secretInput}
                     onChange={(e) => setSecretInput(e.target.value)}
                     placeholder="Enter admin secret..."
                     className="form-input w-full pl-9 text-sm font-mono"
@@ -294,8 +294,8 @@ export default function Admin() {
       {/* Navigation Sub-Tabs */}
       <div className="flex items-center gap-2 mb-8 border-b border-purple-500/15 pb-3 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          aria-pressed={activeTab === 'overview'} onClick={() => setActiveTab('overview')}
+          className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'overview'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : isLight ? 'text-slate-600 hover:bg-slate-200' : 'text-slate-400 hover:bg-white/5'
@@ -305,8 +305,8 @@ export default function Admin() {
         </button>
 
         <button
-          onClick={() => setActiveTab('users')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          aria-pressed={activeTab === 'users'} onClick={() => setActiveTab('users')}
+          className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'users'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : isLight ? 'text-slate-600 hover:bg-slate-200' : 'text-slate-400 hover:bg-white/5'
@@ -316,8 +316,8 @@ export default function Admin() {
         </button>
 
         <button
-          onClick={() => setActiveTab('resumes')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          aria-pressed={activeTab === 'resumes'} onClick={() => setActiveTab('resumes')}
+          className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'resumes'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : isLight ? 'text-slate-600 hover:bg-slate-200' : 'text-slate-400 hover:bg-white/5'
@@ -327,8 +327,8 @@ export default function Admin() {
         </button>
 
         <button
-          onClick={() => setActiveTab('system')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          aria-pressed={activeTab === 'system'} onClick={() => setActiveTab('system')}
+          className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'system'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : isLight ? 'text-slate-600 hover:bg-slate-200' : 'text-slate-400 hover:bg-white/5'
@@ -463,7 +463,7 @@ export default function Admin() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search user name..."
+                aria-label="Search users by name" placeholder="Search user name..."
                 className="form-input text-xs w-full pl-8 py-2"
               />
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />

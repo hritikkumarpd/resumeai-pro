@@ -1,0 +1,54 @@
+{
+  "Times New Roman": {
+    "family": "\"Times New Roman\", \"Tinos\", serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Tinos:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Arial": {
+    "family": "\"Arial\", \"Arimo\", sans-serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Calibri": {
+    "family": "\"Calibri\", \"Carlito\", sans-serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Cambria": {
+    "family": "\"Cambria\", \"Caladea\", serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Caladea:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Georgia": {
+    "family": "\"Georgia\", \"Gelasio\", serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Gelasio:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Garamond": {
+    "family": "\"Garamond\", \"EB Garamond\", serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Helvetica": {
+    "family": "\"Helvetica\", \"Arimo\", sans-serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Verdana": {
+    "family": "\"Verdana\", \"Open Sans\", sans-serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Inter": {
+    "family": "\"Inter\", sans-serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Roboto": {
+    "family": "\"Roboto\", sans-serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Lato": {
+    "family": "\"Lato\", sans-serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Open Sans": {
+    "family": "\"Open Sans\", sans-serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  },
+  "Source Sans 3": {
+    "family": "\"Source Sans 3\", sans-serif",
+    "stylesheet": "https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  }
+}

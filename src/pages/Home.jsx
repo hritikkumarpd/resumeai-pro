@@ -85,21 +85,15 @@ function Hero() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           {/* Left */}
           <div className="flex flex-col gap-7">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full w-fit text-xs font-semibold animate-fade-up"
-              style={{ background: 'rgba(124,58,237,.15)', border: '1px solid rgba(124,58,237,.4)', color: '#A78BFA' }}>
-              <span className="pulse-dot" />
-              Trusted by 100+ job seekers worldwide
-            </div>
-
             <h1 className="font-heading font-extrabold leading-[1.08] tracking-tight animate-fade-up"
               style={{ fontSize: 'clamp(2.8rem,5.5vw,4.5rem)', animationDelay: '0.1s' }}>
-              Build Resumes That{' '}
-              <span className="gradient-text">Get You Hired</span>
+              Build a resume for{' '}
+              <span className="gradient-text">your next role</span>
             </h1>
 
-            <p className="text-slate-400 leading-relaxed max-w-[500px] animate-fade-up"
+            <p className="text-[var(--ui-muted)] leading-relaxed max-w-[500px] animate-fade-up"
               style={{ fontSize: 'clamp(1rem,1.5vw,1.125rem)', animationDelay: '0.2s' }}>
-              The world's #1 AI resume builder. Create ATS-optimized resumes in minutes. Used by candidates landing roles at Google, Amazon, Meta and 10,000+ top companies.
+              Choose a template, write about your experience, and check how your resume matches a job description. Export a PDF when you’re ready to apply.
             </p>
 
             <div className="flex gap-3 flex-wrap animate-fade-up" style={{ animationDelay: '0.3s' }}>
@@ -111,21 +105,13 @@ function Hero() {
               </Link>
             </div>
 
-            <div className="flex items-center gap-4 sm:gap-8 flex-wrap animate-fade-up" style={{ animationDelay: '0.4s' }}>
-              {[{ v: '100+', l: 'Users' }, { v: '90%', l: 'Interview Rate' }, { v: '10+', l: 'Templates' }, { v: '4.3★', l: 'Rating' }].map(s => (
-                <div key={s.l}>
-                  <div className="font-heading font-extrabold text-2xl gradient-text">{s.v}</div>
-                  <div className="text-slate-500 text-xs mt-0.5">{s.l}</div>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Right – floating resume card */}
           <div className="relative flex justify-center items-center animate-fade-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative w-full max-w-[330px] h-[420px]">
               {/* Resume mock - 100% Clean Black & White Indian ATS */}
-              <div className="w-full h-full bg-white rounded-2xl overflow-hidden cursor-pointer transition-transform duration-500 p-5 flex flex-col font-sans"
+              <div className="w-full h-full bg-white text-gray-900 rounded-2xl overflow-hidden transition-transform duration-500 p-5 flex flex-col font-sans"
                 style={{
                   boxShadow: '0 32px 80px rgba(0,0,0,.7), 0 0 40px rgba(16,185,129,.15)',
                   transform: 'perspective(1000px) rotateY(-6deg) rotateX(3deg)',
@@ -138,7 +124,7 @@ function Hero() {
                   <div className="font-bold text-black text-sm uppercase tracking-wider" style={{ letterSpacing: '1px' }}>
                     HRITIK KUMAR
                   </div>
-                  <div className="text-[8px] text-black-750 mt-0.5">
+                  <div className="text-[8px] text-gray-700 mt-0.5">
                     +91 9471636126 | hritikkumarpd@gmail.com | LinkedIn | Bengaluru, India
                   </div>
                 </div>
@@ -200,20 +186,20 @@ function Hero() {
 
               {/* ATS badge */}
               <div className="hidden sm:block absolute -right-8 top-6 animate-float-1 rounded-xl px-3 py-2 shadow-glow"
-                style={{ background: '#111338', border: '1px solid rgba(16,185,129,.4)' }}>
+                style={{ background: 'var(--bg-card)', border: '1px solid rgba(16,185,129,.4)' }}>
                 <div className="text-[10px] uppercase font-bold text-emerald-400">ATS Score</div>
                 <div className="font-heading font-extrabold text-2xl text-emerald-400">98%</div>
-                <div className="text-[9px] text-slate-400">100% Parse Rate</div>
+                <div className="text-[9px] text-[var(--ui-muted)]">100% Parse Rate</div>
               </div>
 
               {/* Indian Approved badge */}
               <div className="hidden sm:block absolute -left-12 bottom-16 animate-float-2 rounded-xl px-3 py-2 shadow-glow"
-                style={{ background: '#111338', border: '1px solid rgba(124,58,237,.4)', whiteSpace: 'nowrap' }}>
+                style={{ background: 'var(--bg-card)', border: '1px solid rgba(124,58,237,.4)', whiteSpace: 'nowrap' }}>
                 <div className="flex items-center gap-1.5">
                   <CheckCircle size={13} className="text-emerald-400" />
-                  <span className="text-xs font-semibold text-slate-200">🇮🇳 Indian Standard ATS</span>
+                  <span className="text-xs font-semibold text-[var(--ui-text)]">🇮🇳 Indian Standard ATS</span>
                 </div>
-                <div className="text-[10px] text-slate-400 mt-0.5">No colors · Clean Overleaf Style</div>
+                <div className="text-[10px] text-[var(--ui-muted)] mt-0.5">No colors · Clean Overleaf Style</div>
               </div>
             </div>
           </div>
@@ -240,7 +226,7 @@ function TrustBar() {
         </p>
         <div className="flex items-center justify-center gap-8 flex-wrap">
           {cos.map(c => (
-            <span key={c} className="text-slate-600 font-heading font-bold text-sm hover:text-slate-400 transition-colors cursor-default select-none">{c}</span>
+            <span key={c} className="text-slate-600 font-heading font-bold text-sm hover:text-[var(--ui-muted)] transition-colors cursor-default select-none">{c}</span>
           ))}
         </div>
       </div>
@@ -258,7 +244,7 @@ function Features() {
           <h2 className="font-heading font-bold gradient-text mb-3" style={{ fontSize: 'clamp(2rem,4vw,3rem)' }}>
             Everything you need to land your dream job
           </h2>
-          <p className="text-slate-400 text-base">Powerful AI tools that take your resume from good to exceptional.</p>
+          <p className="text-[var(--ui-muted)] text-base">Powerful AI tools that take your resume from good to exceptional.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 stagger">
           {features.map((f, i) => (
@@ -268,7 +254,7 @@ function Features() {
                 <f.icon size={22} className="text-white opacity-90" />
               </div>
               <h3 className="font-heading font-bold text-lg mb-2">{f.title}</h3>
-              <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
+              <p className="text-[var(--ui-muted)] text-sm leading-relaxed">{f.desc}</p>
             </div>
           ))}
         </div>
@@ -289,7 +275,7 @@ function HowItWorks() {
           <h2 className="font-heading font-bold mb-3" style={{ fontSize: 'clamp(2rem,4vw,3rem)' }}>
             From blank page to{' '}<span className="gradient-text">hired in 3 steps</span>
           </h2>
-          <p className="text-slate-400 text-base">No design skills needed. Just fill in your details and let AI do the heavy lifting.</p>
+          <p className="text-[var(--ui-muted)] text-base">No design skills needed. Just fill in your details and let AI do the heavy lifting.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10 relative">
           <div className="hidden md:block absolute top-8 left-1/3 right-1/3 h-px"
@@ -301,7 +287,7 @@ function HowItWorks() {
                 {s.n}
               </div>
               <h3 className="font-heading font-bold text-lg mb-2">{s.title}</h3>
-              <p className="text-slate-400 text-sm leading-relaxed max-w-xs">{s.desc}</p>
+              <p className="text-[var(--ui-muted)] text-sm leading-relaxed max-w-xs">{s.desc}</p>
             </div>
           ))}
         </div>
@@ -325,7 +311,7 @@ function Testimonials() {
           <h2 className="font-heading font-bold mb-3" style={{ fontSize: 'clamp(2rem,4vw,3rem)' }}>
             Join <span className="gradient-text">100+</span> people who got hired
           </h2>
-          <p className="text-slate-400">Real results from real job seekers. Their success could be yours.</p>
+          <p className="text-[var(--ui-muted)]">Real results from real job seekers. Their success could be yours.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 stagger">
           {testimonials.map((t, i) => (
@@ -335,7 +321,7 @@ function Testimonials() {
                   <Star key={j} size={13} className="fill-yellow-400 text-yellow-400" />
                 ))}
               </div>
-              <blockquote className="text-slate-300 text-sm leading-relaxed mb-5 italic">"{t.text}"</blockquote>
+              <blockquote className="text-[var(--ui-secondary)] text-sm leading-relaxed mb-5 italic">"{t.text}"</blockquote>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
                   style={{ background: t.color }}>
@@ -366,14 +352,14 @@ function PricingSnapshot() {
           <h2 className="font-heading font-bold mb-3" style={{ fontSize: 'clamp(2rem,4vw,3rem)' }}>
             Simple, <span className="gradient-text">transparent pricing</span>
           </h2>
-          <p className="text-slate-400">Start free. Upgrade when you need more. Cancel anytime.</p>
+          <p className="text-[var(--ui-muted)]">Start free. Upgrade when you need more. Cancel anytime.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 stagger">
           {plans.map(plan => (
             <div key={plan.name}
               className="relative p-8 rounded-2xl flex flex-col reveal transition-all duration-300 hover:-translate-y-1.5"
               style={{
-                background: plan.featured ? 'linear-gradient(135deg,rgba(124,58,237,.25),rgba(6,182,212,.12))' : '#111338',
+                background: plan.featured ? 'linear-gradient(135deg,rgba(124,58,237,.25),rgba(6,182,212,.12))' : 'var(--bg-card)',
                 border: `1px solid ${plan.featured ? 'rgba(124,58,237,.5)' : 'rgba(124,58,237,.2)'}`,
                 boxShadow: plan.featured ? '0 0 60px rgba(124,58,237,.25)' : 'none',
               }}>
@@ -386,12 +372,12 @@ function PricingSnapshot() {
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">{plan.name}</div>
               <div className="flex items-end gap-1 mb-1">
                 <span className="font-heading font-extrabold text-4xl">{plan.price}</span>
-                <span className="text-slate-400 text-sm pb-2">{plan.period}</span>
+                <span className="text-[var(--ui-muted)] text-sm pb-2">{plan.period}</span>
               </div>
               <p className="text-slate-500 text-sm mb-6">{plan.desc}</p>
               <ul className="flex flex-col gap-2.5 mb-8 flex-1">
                 {plan.features.map(f => (
-                  <li key={f} className="flex items-center gap-2.5 text-sm text-slate-300">
+                  <li key={f} className="flex items-center gap-2.5 text-sm text-[var(--ui-secondary)]">
                     <CheckCircle size={14} className="text-emerald-400 flex-shrink-0" />{f}
                   </li>
                 ))}
@@ -421,7 +407,7 @@ function FaqItem({ q, a }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="rounded-xl overflow-hidden transition-all duration-200"
-      style={{ border: `1px solid ${open ? 'rgba(124,58,237,.5)' : 'rgba(124,58,237,.2)'}`, background: '#111338' }}>
+      style={{ border: `1px solid ${open ? 'rgba(124,58,237,.5)' : 'rgba(124,58,237,.2)'}`, background: 'var(--bg-card)' }}>
       <button className="w-full flex items-center justify-between px-5 py-4 text-left"
         onClick={() => setOpen(v => !v)}>
         <span className="font-semibold text-sm pr-4">{q}</span>
@@ -429,8 +415,8 @@ function FaqItem({ q, a }) {
           style={{ transform: open ? 'rotate(180deg)' : 'rotate(0)' }} />
       </button>
       {open && (
-        <div className="px-5 pb-4" style={{ background: '#0D0F2E' }}>
-          <p className="text-slate-400 text-sm leading-relaxed">{a}</p>
+        <div className="px-5 pb-4" style={{ background: 'var(--bg-secondary)' }}>
+          <p className="text-[var(--ui-muted)] text-sm leading-relaxed">{a}</p>
         </div>
       )}
     </div>
@@ -469,8 +455,8 @@ function CTABanner() {
             <h2 className="font-heading font-extrabold mb-4" style={{ fontSize: 'clamp(2rem,4vw,3.5rem)' }}>
               Ready to land your <span className="gradient-text">dream job?</span>
             </h2>
-            <p className="text-slate-300 mb-8 text-lg max-w-xl mx-auto">
-              Join millions of job seekers who've already upgraded their careers with ResumeAI Pro.
+            <p className="text-[var(--ui-secondary)] mb-8 text-lg max-w-xl mx-auto">
+              Start with a template, or compare plans to see what each one includes.
             </p>
             <div className="flex gap-4 justify-center flex-wrap">
               <Link to="/builder" className="btn-primary text-base px-8 py-4 rounded-xl gap-2">

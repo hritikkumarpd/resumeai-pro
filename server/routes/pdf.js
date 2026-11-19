@@ -3,6 +3,7 @@ const { requireAuth } = require('../middleware/requireAuth')
 const { supabaseAdmin } = require('../lib/supabase')
 const { isPaidPlan } = require('../config/plans')
 
+const resumeFonts = require('../config/resumeFonts.json')
 const fs = require('fs')
 const net = require('net')
 
@@ -509,7 +510,7 @@ function buildResumeHtml(d, accent, font) {
   const certs = (d.certifications || [])
 
   const safeAccent = /^#[0-9a-fA-F]{3,8}$/.test(accent) ? accent : '#7C3AED'
-  const safeFont = font ? font.replace(/[^a-zA-Z0-9 _-]/g, '') : 'Inter'
+  const typeface = Object.hasOwn(resumeFonts, font) ? resumeFonts[font] : resumeFonts.Inter
 
   function formatUrl(url) {
     if (!url) return ''
@@ -534,13 +535,13 @@ function buildResumeHtml(d, accent, font) {
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(safeFont)}:wght@400;600;700&display=swap');
+  @import url('${typeface.stylesheet}');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: '${safeFont}', Arial, sans-serif; font-size: 9pt; color: #1e293b; background: white; }
+  body { font-family: ${typeface.family}; font-size: 9pt; color: #1e293b; background: white; }
   a { color: inherit; text-decoration: none; }
   a:hover { text-decoration: underline; }
   .header { background: linear-gradient(135deg,#1a1040,${safeAccent}); padding: 22px 28px; }
-  .header h1 { font-size: 20pt; font-weight: 700; color: white; font-family: Georgia, serif; }
+  .header h1 { font-size: 20pt; font-weight: 700; color: white; font-family: inherit; }
   .header .title { font-size: 10pt; color: ${safeAccent}dd; margin-top: 2px; }
   .header .contact { font-size: 7.5pt; color: rgba(255,255,255,0.75); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 12px; }
   .header .contact a { color: rgba(255,255,255,0.85); }
